@@ -1,0 +1,15 @@
+tweepy
+langchain_openai
+pydantic
+python-dotenv
+langchain
+langchain-community
+langgraph
+jupyter
+ipywidgets
+jupyterlab
+requests_oauthlib
+langchain-core
+nest_asyncio
+asyncio
+notebook
