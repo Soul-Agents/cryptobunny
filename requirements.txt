@@ -13,3 +13,10 @@ langchain-core
 nest_asyncio
 asyncio
 notebook
+langchain
+langchain-openai
+tweepy
+python-dotenv
+pydantic
+langgraph
+requests-oauthlib
