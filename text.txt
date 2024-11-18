@@ -45,6 +45,9 @@ pip install tweepy requests-oauthlib pydantic langchain
 # Create main.py
 nano /home/cryptobunny/cryptobunny/main.py
 
+
+the below code:
+
 # Content of main.py
 import os
 import time
