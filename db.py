@@ -6,10 +6,7 @@ import os
 from schemas import ReplyToAITweet, BaseTweet
 
 
-# MONGODB_URI = os.environ["MONGODB_URI"]
-MONGODB_URI = (
-    "mongodb://mongo:GnIJsgCAsqjGzXYWrOhbpTdpEWWVpEEI@autorack.proxy.rlwy.net:20543"
-)
+MONGODB_URI = os.environ["MONGODB_URI"]
 
 
 class TweetDB:
