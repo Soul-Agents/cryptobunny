@@ -15,6 +15,8 @@ import os
 # endregion
 
 # region Environment Configuration
+test = os.environ["TEST"]
+print(test)
 API_KEY = os.environ["API_KEY"]
 API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
 API_SECRET_KEY = os.environ["API_SECRET_KEY"]
