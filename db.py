@@ -124,13 +124,22 @@ class TweetDB:
         Add a single written AI tweet to the database
         """
         try:
+            formatted_tweet = {
+                "tweet_id": str(tweet["id"]),  # Convert id to tweet_id
+                "text": tweet["text"],
+                "saved_at": datetime.now(timezone.utc),  # Add timestamp
+                "edit_history_tweet_ids": tweet["edit_history_tweet_ids"],
+            }
+
             self.written_ai_tweets.update_one(
-                {"tweet_id": tweet["tweet_id"]}, {"$set": tweet}, upsert=True
+                {"tweet_id": formatted_tweet["tweet_id"]},
+                {"$set": formatted_tweet},
+                upsert=True,
             )
-            return "Success"
+            return {"status": "Success"}
         except Exception as e:
             print(f"Error adding written tweet: {e}")
-            return "Error"
+            return {"status": "Error", "message": str(e)}
 
     def get_all_tweets(self, limit: int = None, offset: int = 0) -> List[BaseTweet]:
         """
