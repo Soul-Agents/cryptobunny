@@ -460,4 +460,5 @@ if __name__ == "__main__":
     ask_agent_crypto_question = """What have you done today make everyone follow the white rabbit, escape the matrix and get rich, NFA??"""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
+    db.close()
 # endregion
