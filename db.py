@@ -16,6 +16,7 @@ class TweetDB:
         if not MONGODB_URI:
             raise ValueError("MONGODB_URI not found in environment variables")
 
+        print("Initializing database connection...")
         self.update_threshold = timedelta(minutes=60)
         # Connect to MongoDB
         self.client = MongoClient(MONGODB_URI)
@@ -271,30 +272,3 @@ class TweetDB:
     def close(self):
         """Close MongoDB connection"""
         self.client.close()
-
-
-# Example usage
-def main():
-    # Initialize database connection
-    db = TweetDB()
-
-    try:
-
-        # Add tweets
-        # results = db.add_tweets(new_tweets)
-        # print(f"Addition results: {results}")
-
-        # Fetch all tweets with pagination
-        result = db.tweets.delete_many({})
-        print(f"Deleted {result.deleted_count} tweets")
-        tweets = db.get_all_tweets(limit=10, offset=0)
-        print("\nRetrieved tweets:", tweets)
-        # for tweet in tweets:
-        #     print(f"- {tweet['text']} (ID: {tweet['tweet_id']})")
-
-    finally:
-        db.close()
-
-
-if __name__ == "__main__":
-    main()
