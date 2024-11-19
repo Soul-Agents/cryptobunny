@@ -15,14 +15,13 @@ import os
 # endregion
 
 # region Environment Configuration
-config = dotenv_values(r"service_final\.env")
-API_KEY = config["API_KEY"]
-API_KEY_OPENAI = config["API_KEY_OPENAI"]
-API_SECRET_KEY = config["API_SECRET_KEY"]
-BEARER_TOKEN = config["BEARER_TOKEN"]
-ACCESS_TOKEN = config["ACCESS_TOKEN"]
-ACCESS_TOKEN_SECRET = config["ACCESS_TOKEN_SECRET"]
-TAVILY_API_KEY = config["TAVILY_API_KEY"]
+API_KEY = os.environ["API_KEY"]
+API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
+API_SECRET_KEY = os.environ["API_SECRET_KEY"]
+BEARER_TOKEN = os.environ["BEARER_TOKEN"]
+ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
+ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
+TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
 # endregion
 
 # region LLM Configuration
