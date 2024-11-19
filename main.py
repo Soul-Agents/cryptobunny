@@ -53,11 +53,14 @@ class RateLimiter:
         self.last_action_time = current_time
 
 
-class PostTweetTool:
+class PostTweetTool(RateLimiter):
     name: str = "Post tweet"
     description: str = "Post a tweet with the given message"
 
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
+        # Initialize the parent RateLimiter class
+        super().__init__()
+
         # Initialize OAuth1Session with credentials
         self.oauth = OAuth1Session(
             client_key=API_KEY,
@@ -101,13 +104,13 @@ class AnswerTweetInput(BaseModel):
     message: str
 
 
-class AnswerTweetTool:
+class AnswerTweetTool(RateLimiter):
     name: str = "Answer tweet"
     description: str = "Use this tool when you need to reply to a tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
 
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
-        # Initialize the Twitter API client
+        super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -131,9 +134,9 @@ class AnswerTweetTool:
         return "Not implemented"
 
 
-class ReadTweetsTool:
+class ReadTweetsTool(RateLimiter):
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
-        # Initialize the Twitter API client
+        super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -198,7 +201,7 @@ answer_tool = AnswerTweetTool(
 read_tweets_tool = ReadTweetsTool(
     API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
 )
-# browse_internet = TavilySearchResults(max_results=1)
+browse_internet = TavilySearchResults(max_results=1)
 # endregion
 
 
@@ -258,7 +261,7 @@ read_tweets_tool_wrapped = StructuredTool.from_function(
 )
 
 tools = [
-    # browse_internet,
+    browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
     read_tweets_tool_wrapped,
@@ -400,7 +403,8 @@ prompt = ChatPromptTemplate.from_messages(
                 To achieve this goal you need to use the following tools:
 
                 **Tools:**
-                
+                1. **browse_internet**
+                - **Objective:** Use the internet tool to verify information from the timeline.
          
                 2. **tweet_tool_wrapped**
                 - **Objective:** Post a tweet.
