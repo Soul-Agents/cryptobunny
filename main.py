@@ -158,6 +158,10 @@ class ReadTweetsTool(RateLimiter):
             needs_update, current_tweets = db.check_database_status()
 
             if not needs_update:
+                print("Database is up to date, returning current tweets")
+                print(current_tweets)
+                print(type(current_tweets))
+                print([tweet.text for tweet in current_tweets])
                 return [tweet.text for tweet in current_tweets]
 
             since_id = db.get_most_recent_tweet_id()
@@ -190,10 +194,10 @@ class ReadTweetsTool(RateLimiter):
 
             return []
         except tweepy.TweepyException as e:
-            print(f"Tweepy error occurred: {str(e)}")
+            print(f"Tweepy error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
         except Exception as e:
-            print(f"An unexpected error occurred: {str(e)}")
+            print(f"An unexpected error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
 
 
