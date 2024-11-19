@@ -158,7 +158,7 @@ class ReadTweetsTool(RateLimiter):
             needs_update, current_tweets = db.check_database_status()
 
             if not needs_update:
-                return current_tweets
+                return [tweet.text for tweet in current_tweets]
 
             since_id = db.get_most_recent_tweet_id()
 
