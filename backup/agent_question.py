@@ -1,1 +1,0 @@
-ask_agent_crypto_question = '''What have you done today to reach 10000 followers?'''
