@@ -11,8 +11,8 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 import json
 import os
-from db_utils import get_db
 from time import time, sleep
+from db import TweetDB
 
 # endregion
 print("Starting the agent...")
@@ -26,6 +26,10 @@ ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
 API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
 
+# endregion
+
+# region Database Configuration
+db = TweetDB()
 # endregion
 
 # region LLM Configuration
@@ -148,13 +152,12 @@ class ReadTweetsTool(RateLimiter):
         try:
 
             # First, check if the database needs an update
-            with get_db() as db:
-                needs_update, current_tweets = db.check_database_status()
+            needs_update, current_tweets = db.check_database_status()
 
             if not needs_update:
                 return current_tweets
-            with get_db() as db:
-                since_id = db.get_most_recent_tweet_id()
+
+            since_id = db.get_most_recent_tweet_id()
 
             self.check_rate_limit()
 
