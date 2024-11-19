@@ -1,4 +1,4 @@
-#region Imports
+# region Imports
 from requests_oauthlib import OAuth1Session
 from dotenv import dotenv_values
 import tweepy
@@ -11,29 +11,26 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 import json
 import os
-#endregion
 
-#region Environment Configuration
-config = dotenv_values(r'service_final\.env')
+# endregion
+
+# region Environment Configuration
+config = dotenv_values(r"service_final\.env")
 API_KEY = config["API_KEY"]
 API_KEY_OPENAI = config["API_KEY_OPENAI"]
 API_SECRET_KEY = config["API_SECRET_KEY"]
 BEARER_TOKEN = config["BEARER_TOKEN"]
 ACCESS_TOKEN = config["ACCESS_TOKEN"]
 ACCESS_TOKEN_SECRET = config["ACCESS_TOKEN_SECRET"]
-TAVILY_API_KEY = config["TAVILY_API_KEY"] 
-#endregion
+TAVILY_API_KEY = config["TAVILY_API_KEY"]
+# endregion
 
-#region LLM Configuration
-llm = ChatOpenAI(
-    model="gpt-4o", 
-    temperature=0.0, 
-    top_p=0.005, 
-    api_key=API_KEY_OPENAI
-)
-#endregion
+# region LLM Configuration
+llm = ChatOpenAI(model="gpt-4o", temperature=0.0, top_p=0.005, api_key=API_KEY_OPENAI)
+# endregion
 
-#region Twitter Service Classes
+
+# region Twitter Service Classes
 class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Post a tweet with the given message"
@@ -44,36 +41,40 @@ class PostTweetTool:
             client_key=API_KEY,
             client_secret=API_SECRET_KEY,
             resource_owner_key=ACCESS_TOKEN,
-            resource_owner_secret=ACCESS_TOKEN_SECRET
+            resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
 
     def post_tweet(self, message: str):
         try:
             # Prepare the payload
             payload = {"text": message}
-            
+
             # Make the request to Twitter API v2
             response = self.oauth.post(
                 "https://api.twitter.com/2/tweets",
                 json=payload,
             )
-            
+
             # Check response
             if response.status_code != 201:
                 raise Exception(
-                    "Request returned an error: {} {}".format(response.status_code, response.text)
+                    "Request returned an error: {} {}".format(
+                        response.status_code, response.text
+                    )
                 )
-                
+
             print("Tweet posted successfully!")
             return response.json()
-            
+
         except Exception as e:
             print(f"Error posting tweet: {str(e)}")
             return None
 
+
 class AnswerTweetInput(BaseModel):
     tweet_id: str
     message: str
+
 
 class AnswerTweetTool:
     name: str = "Answer tweet"
@@ -86,7 +87,7 @@ class AnswerTweetTool:
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET
+            access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
     def _run(self, tweet_id: str, message: str) -> str:
@@ -102,6 +103,7 @@ class AnswerTweetTool:
     async def _arun(self):
         return "Not implemented"
 
+
 class ReadTweetsTool:
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
         # Initialize the Twitter API client
@@ -109,14 +111,14 @@ class ReadTweetsTool:
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET
+            access_token_secret=ACCESS_TOKEN_SECRET,
         )
 
     def _run(self) -> list:
         try:
             # Fetch the home timeline tweets
-            response = self.api.get_home_timeline(tweet_fields=['text'])
-            if hasattr(response, 'data'):
+            response = self.api.get_home_timeline(tweet_fields=["text"])
+            if hasattr(response, "data"):
                 # Extract the text of each tweet
                 return [tweet.text for tweet in response.data]
             return []
@@ -126,16 +128,23 @@ class ReadTweetsTool:
         except Exception as e:
             print(f"An unexpected error occurred: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
-#endregion
 
-#region Tool Initialization
+
+# endregion
+
+# region Tool Initialization
 tweet_tool = PostTweetTool(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-answer_tool = AnswerTweetTool(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-read_tweets_tool = ReadTweetsTool(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+answer_tool = AnswerTweetTool(
+    API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
+)
+read_tweets_tool = ReadTweetsTool(
+    API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
+)
 browse_internet = TavilySearchResults(max_results=1)
-#endregion
+# endregion
 
-#region Tool Functions
+
+# region Tool Functions
 def post_tweet_tool(message: str) -> str:
     """Post a tweet with the message you decide is the most proper."""
     try:
@@ -145,17 +154,19 @@ def post_tweet_tool(message: str) -> str:
     except Exception as e:
         return f"An error occurred posting tweet: {str(e)}"
 
+
 def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
     """Reply to a specific tweet identified by tweet_id with the message."""
     try:
         # Validate tweet_id
         if not tweet_id.isdigit():
             return f"Invalid tweet ID format: {tweet_id}"
-            
+
         result = answer_tool._run(tweet_id=tweet_id, message=message)
         return f"Replied to tweet {tweet_id} with: {message}"
     except Exception as e:
         return f"An error occurred replying to tweet: {str(e)}"
+
 
 def read_timeline_tool() -> str:
     try:
@@ -167,36 +178,36 @@ def read_timeline_tool() -> str:
         return "\n".join(tweets)
     except Exception as e:
         return f"An error occurred reading timeline: {str(e)}"
-#endregion
 
-#region Tool Wrapping
+
+# endregion
+
+# region Tool Wrapping
 tweet_tool_wrapped = StructuredTool.from_function(
     func=post_tweet_tool,
     name="tweet",
-    description="Post a tweet with the given message"
+    description="Post a tweet with the given message",
 )
 
 answer_tool_wrapped = StructuredTool.from_function(
-    func=reply_to_tweet_tool,
-    name="answer",
-    description="Reply to a specific tweet"
+    func=reply_to_tweet_tool, name="answer", description="Reply to a specific tweet"
 )
 
 read_tweets_tool_wrapped = StructuredTool.from_function(
     func=read_timeline_tool,
     name="read_timeline",
-    description="Read the timeline tweets"
+    description="Read the timeline tweets",
 )
 
 tools = [
     browse_internet,
-    tweet_tool_wrapped,    
-    answer_tool_wrapped,        
+    tweet_tool_wrapped,
+    answer_tool_wrapped,
     read_tweets_tool_wrapped,
 ]
-#endregion
+# endregion
 
-#region Configuration Data
+# region Configuration Data
 famous_accounts = """
 QwQiao
 MustStopMurad
@@ -314,9 +325,9 @@ marvellousdefi_
 TrycVerrse
 adag1oeth
 """
-#endregion
+# endregion
 
-#region Agent Configuration
+# region Agent Configuration
 prompt = ChatPromptTemplate.from_messages(
     [
         (
@@ -357,7 +368,7 @@ prompt = ChatPromptTemplate.from_messages(
                 - You are a key opinion leader in the crypto space.
                 - You are a thought leader in the crypto space.
                 - You are a visionary in the crypto space.
-            """
+            """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -366,20 +377,19 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 agent = create_tool_calling_agent(llm, tools, prompt)
-#endregion
+# endregion
 
-#region Service Execution
+
+# region Service Execution
 def run_crypto_agent(question: str):
     agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        verbose=True, 
-        handle_parsing_errors=True
+        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
     )
     return agent_executor.invoke({"input": question})
 
+
 if __name__ == "__main__":
-    ask_agent_crypto_question = '''What have you done today make everyone follow the white rabbit, escape the matrix and get rich, NFA??'''
+    ask_agent_crypto_question = """What have you done today make everyone follow the white rabbit, escape the matrix and get rich, NFA??"""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
-#endregion
+# endregion
