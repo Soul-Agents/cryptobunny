@@ -1,6 +1,6 @@
 # region Imports
 from requests_oauthlib import OAuth1Session
-from dotenv import dotenv_values
+
 import tweepy
 from typing import Type, Optional
 from pydantic import BaseModel
@@ -11,19 +11,21 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 import json
 import os
+from db_utils import get_db
+from time import time, sleep
 
 # endregion
+print("Starting the agent...")
 
 # region Environment Configuration
-test = os.environ["TEST_TEST"]
-print(test)
 API_KEY = os.environ["API_KEY"]
-API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
 API_SECRET_KEY = os.environ["API_SECRET_KEY"]
 BEARER_TOKEN = os.environ["BEARER_TOKEN"]
 ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
 ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
+
 # endregion
 
 # region LLM Configuration
@@ -32,6 +34,25 @@ llm = ChatOpenAI(model="gpt-4o", temperature=0.0, top_p=0.005, api_key=API_KEY_O
 
 
 # region Twitter Service Classes
+class RateLimiter:
+    def __init__(self):
+        self.last_action_time = 0
+        self.min_interval = 300  # 5 minutes between actions
+
+    def check_rate_limit(self):
+        current_time = time()
+        time_since_last_action = current_time - self.last_action_time
+
+        if time_since_last_action < self.min_interval:
+            wait_time = self.min_interval - time_since_last_action
+            print(
+                f"Rate limit: Waiting {wait_time:.1f} seconds before taking action again..."
+            )
+            sleep(wait_time)
+
+        self.last_action_time = current_time
+
+
 class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Post a tweet with the given message"
@@ -47,6 +68,7 @@ class PostTweetTool:
 
     def post_tweet(self, message: str):
         try:
+            self.check_rate_limit()
             # Prepare the payload
             payload = {"text": message}
 
@@ -65,6 +87,8 @@ class PostTweetTool:
                 )
 
             print("Tweet posted successfully!")
+            print("tweet data", response.json()["data"])
+            # db.add_tweet(response.json()["data"])
             return response.json()
 
         except Exception as e:
@@ -93,6 +117,8 @@ class AnswerTweetTool:
 
     def _run(self, tweet_id: str, message: str) -> str:
         try:
+            self.check_rate_limit()
+
             # Post a reply to the tweet
             self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
             return "Reply tweet posted successfully!"
@@ -117,11 +143,42 @@ class ReadTweetsTool:
 
     def _run(self) -> list:
         try:
+
+            # First, check if the database needs an update
+            with get_db() as db:
+                needs_update, current_tweets = db.check_database_status()
+
+            if not needs_update:
+                return current_tweets
+            with get_db() as db:
+                since_id = db.get_most_recent_tweet_id()
+
+            self.check_rate_limit()
+
             # Fetch the home timeline tweets
-            response = self.api.get_home_timeline(tweet_fields=["text"])
+            response = self.api.get_home_timeline(
+                tweet_fields=["text", "created_at", "author_id"],
+                max_results=10,
+                since_id=since_id,
+            )
             if hasattr(response, "data"):
+                formatted_tweets = []
+                for tweet in response.data:
+                    formatted_tweets.append(
+                        {
+                            "tweet_id": str(tweet.id),
+                            "text": tweet.text,
+                            "created_at": tweet.created_at,
+                            "author_id": tweet.author_id,
+                        }
+                    )
+
+                # Save tweets to database
+                results = db.add_tweets(formatted_tweets)
+                print(f"Added {len(results)} tweets to the database")
                 # Extract the text of each tweet
                 return [tweet.text for tweet in response.data]
+
             return []
         except tweepy.TweepyException as e:
             print(f"Tweepy error occurred: {str(e)}")
@@ -141,7 +198,7 @@ answer_tool = AnswerTweetTool(
 read_tweets_tool = ReadTweetsTool(
     API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
 )
-browse_internet = TavilySearchResults(max_results=1)
+# browse_internet = TavilySearchResults(max_results=1)
 # endregion
 
 
@@ -201,7 +258,7 @@ read_tweets_tool_wrapped = StructuredTool.from_function(
 )
 
 tools = [
-    browse_internet,
+    # browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
     read_tweets_tool_wrapped,
@@ -344,9 +401,7 @@ prompt = ChatPromptTemplate.from_messages(
 
                 **Tools:**
                 
-                1. **browse_internet**
-                - **Objective:** Verify information from the timeline.
-
+         
                 2. **tweet_tool_wrapped**
                 - **Objective:** Post a tweet.
 
