@@ -95,7 +95,10 @@ class PostTweetTool(RateLimiter):
 
             print("Tweet posted successfully!")
             print("tweet data", response.json()["data"])
-            # db.add_tweet(response.json()["data"])
+            # Add tweet to database
+            # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
+            tweet = response.json()["data"]
+            db.add_written_ai_tweet(tweet)
             return response.json()
 
         except Exception as e:
@@ -164,7 +167,7 @@ class ReadTweetsTool(RateLimiter):
             # Fetch the home timeline tweets
             response = self.api.get_home_timeline(
                 tweet_fields=["text", "created_at", "author_id"],
-                max_results=10,
+                max_results=100,
                 since_id=since_id,
             )
             if hasattr(response, "data"):
