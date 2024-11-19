@@ -159,10 +159,8 @@ class ReadTweetsTool(RateLimiter):
 
             if not needs_update:
                 print("Database is up to date, returning current tweets")
-                print(current_tweets)
-                print(type(current_tweets))
-                print([tweet.text for tweet in current_tweets])
-                return [tweet.text for tweet in current_tweets]
+                print([tweet["text"] for tweet in current_tweets])
+                return [tweet["text"] for tweet in current_tweets]
 
             since_id = db.get_most_recent_tweet_id()
 
