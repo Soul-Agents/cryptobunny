@@ -6,7 +6,10 @@ import os
 from schemas import ReplyToAITweet, BaseTweet
 
 
-MONGODB_URI = os.environ["MONGODB_URI"]
+# MONGODB_URI = os.environ["MONGODB_URI"]
+MONGODB_URI = (
+    "mongodb://mongo:GnIJsgCAsqjGzXYWrOhbpTdpEWWVpEEI@autorack.proxy.rlwy.net:20543"
+)
 
 
 class TweetDB:
@@ -231,8 +234,8 @@ class TweetDB:
             tuple[bool, list]: (needs_update, current_tweets)
         """
         # Get latest 100 tweets from database
-        current_tweets = self.db.get_all_tweets(limit=10)
-        print("\nCurrent tweets in database (latest 10):")
+        current_tweets = self.get_all_tweets(limit=100)
+        print("\nCurrent tweets in database (latest 100):")
         for tweet in current_tweets:
             created_at = tweet.get("created_at", "No date")
             print(f"Tweet ID: {tweet['tweet_id']}, Created at: {created_at}")
