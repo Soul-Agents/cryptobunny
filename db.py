@@ -241,11 +241,11 @@ class TweetDB:
         """
         # Get latest 100 tweets from database
         current_tweets = self.get_all_tweets(limit=100)
-        print("\nCurrent tweets in database (latest 100):")
+        # print("\nCurrent tweets in database (latest 100):")
         for tweet in current_tweets:
             created_at = tweet.get("created_at", "No date")
-            print(f"Tweet ID: {tweet['tweet_id']}, Created at: {created_at}")
-            print(f"Text: {tweet['text']}\n")
+            # print(f"Tweet ID: {tweet['tweet_id']}, Created at: {created_at}")
+            # print(f"Text: {tweet['text']}\n")
 
         if not current_tweets:
             return True, []
