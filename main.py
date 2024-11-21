@@ -33,7 +33,13 @@ db = TweetDB()
 # endregion
 
 # region LLM Configuration
-llm = ChatOpenAI(model="gpt-4o", temperature=0.0, top_p=0.005, api_key=API_KEY_OPENAI)
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=1,
+    top_p=0.005,
+    api_key=API_KEY_OPENAI,
+    presence_penalty=0.8,
+)
 # endregion
 
 
