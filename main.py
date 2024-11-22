@@ -1,6 +1,6 @@
 # region Imports
 from requests_oauthlib import OAuth1Session
-from dotenv import dotenv_values
+
 import tweepy
 from typing import Type, Optional
 from pydantic import BaseModel
@@ -11,32 +11,66 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 import json
 import os
+from time import time, sleep
+from db import TweetDB
 
 # endregion
+print("Starting the agent...")
 
 # region Environment Configuration
-test = os.environ["TEST_TEST"]
-print(test)
 API_KEY = os.environ["API_KEY"]
-API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
 API_SECRET_KEY = os.environ["API_SECRET_KEY"]
 BEARER_TOKEN = os.environ["BEARER_TOKEN"]
 ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
 ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
+
+# endregion
+
+# region Database Configuration
+db = TweetDB()
 # endregion
 
 # region LLM Configuration
-llm = ChatOpenAI(model="gpt-4o", temperature=0.0, top_p=0.005, api_key=API_KEY_OPENAI)
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=1,
+    top_p=0.005,
+    api_key=API_KEY_OPENAI,
+    presence_penalty=0.8,
+)
 # endregion
 
 
 # region Twitter Service Classes
-class PostTweetTool:
+class RateLimiter:
+    def __init__(self):
+        self.last_action_time = 0
+        self.min_interval = 300  # 5 minutes between actions
+
+    def check_rate_limit(self):
+        current_time = time()
+        time_since_last_action = current_time - self.last_action_time
+
+        if time_since_last_action < self.min_interval:
+            wait_time = self.min_interval - time_since_last_action
+            print(
+                f"Rate limit: Waiting {wait_time:.1f} seconds before taking action again..."
+            )
+            sleep(wait_time)
+
+        self.last_action_time = current_time
+
+
+class PostTweetTool(RateLimiter):
     name: str = "Post tweet"
     description: str = "Post a tweet with the given message"
 
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
+        # Initialize the parent RateLimiter class
+        super().__init__()
+
         # Initialize OAuth1Session with credentials
         self.oauth = OAuth1Session(
             client_key=API_KEY,
@@ -47,6 +81,7 @@ class PostTweetTool:
 
     def post_tweet(self, message: str):
         try:
+            self.check_rate_limit()
             # Prepare the payload
             payload = {"text": message}
 
@@ -65,6 +100,11 @@ class PostTweetTool:
                 )
 
             print("Tweet posted successfully!")
+            print("tweet data", response.json()["data"])
+            # Add tweet to database
+            # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
+            tweet = response.json()["data"]
+            db.add_written_ai_tweet(tweet)
             return response.json()
 
         except Exception as e:
@@ -77,13 +117,13 @@ class AnswerTweetInput(BaseModel):
     message: str
 
 
-class AnswerTweetTool:
+class AnswerTweetTool(RateLimiter):
     name: str = "Answer tweet"
     description: str = "Use this tool when you need to reply to a tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
 
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
-        # Initialize the Twitter API client
+        super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -93,6 +133,8 @@ class AnswerTweetTool:
 
     def _run(self, tweet_id: str, message: str) -> str:
         try:
+            self.check_rate_limit()
+
             # Post a reply to the tweet
             self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
             return "Reply tweet posted successfully!"
@@ -105,9 +147,9 @@ class AnswerTweetTool:
         return "Not implemented"
 
 
-class ReadTweetsTool:
+class ReadTweetsTool(RateLimiter):
     def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
-        # Initialize the Twitter API client
+        super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -117,17 +159,49 @@ class ReadTweetsTool:
 
     def _run(self) -> list:
         try:
+
+            # First, check if the database needs an update
+            needs_update, current_tweets = db.check_database_status()
+
+            if not needs_update:
+                print("Database is up to date, returning current tweets")
+                print([tweet["text"] for tweet in current_tweets])
+                return [tweet["text"] for tweet in current_tweets]
+
+            since_id = db.get_most_recent_tweet_id()
+
+            self.check_rate_limit()
+
             # Fetch the home timeline tweets
-            response = self.api.get_home_timeline(tweet_fields=["text"])
+            response = self.api.get_home_timeline(
+                tweet_fields=["text", "created_at", "author_id"],
+                max_results=100,
+                since_id=since_id,
+            )
             if hasattr(response, "data"):
+                formatted_tweets = []
+                for tweet in response.data:
+                    formatted_tweets.append(
+                        {
+                            "tweet_id": str(tweet.id),
+                            "text": tweet.text,
+                            "created_at": tweet.created_at,
+                            "author_id": tweet.author_id,
+                        }
+                    )
+
+                # Save tweets to database
+                results = db.add_tweets(formatted_tweets)
+                print(f"Added {len(results)} tweets to the database")
                 # Extract the text of each tweet
                 return [tweet.text for tweet in response.data]
+
             return []
         except tweepy.TweepyException as e:
-            print(f"Tweepy error occurred: {str(e)}")
+            print(f"Tweepy error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
         except Exception as e:
-            print(f"An unexpected error occurred: {str(e)}")
+            print(f"An unexpected error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
 
 
@@ -343,10 +417,9 @@ prompt = ChatPromptTemplate.from_messages(
                 To achieve this goal you need to use the following tools:
 
                 **Tools:**
-                
                 1. **browse_internet**
-                - **Objective:** Verify information from the timeline.
-
+                - **Objective:** Use the internet tool to verify information from the timeline.
+         
                 2. **tweet_tool_wrapped**
                 - **Objective:** Post a tweet.
 
@@ -393,4 +466,5 @@ if __name__ == "__main__":
     ask_agent_crypto_question = """What have you done today make everyone follow the white rabbit, escape the matrix and get rich, NFA??"""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
+    db.close()
 # endregion
