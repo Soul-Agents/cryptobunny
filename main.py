@@ -1,6 +1,5 @@
 # region Imports
 from requests_oauthlib import OAuth1Session
-
 import tweepy
 from typing import Type, Optional
 from pydantic import BaseModel
@@ -9,10 +8,10 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
-import json
 import os
 from time import time, sleep
 from db import TweetDB
+
 
 # endregion
 print("Starting the agent...")
@@ -26,11 +25,13 @@ ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
 TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
 API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
 
+
 # endregion
 
 # region Database Configuration
 db = TweetDB()
 # endregion
+
 
 # region LLM Configuration
 llm = ChatOpenAI(
@@ -47,7 +48,7 @@ llm = ChatOpenAI(
 class RateLimiter:
     def __init__(self):
         self.last_action_time = 0
-        self.min_interval = 300  # 5 minutes between actions
+        self.min_interval = 20  # 20 sec between actions
 
     def check_rate_limit(self):
         current_time = time()
@@ -67,7 +68,7 @@ class PostTweetTool(RateLimiter):
     name: str = "Post tweet"
     description: str = "Post a tweet with the given message"
 
-    def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
+    def __init__(self):
         # Initialize the parent RateLimiter class
         super().__init__()
 
@@ -122,18 +123,18 @@ class AnswerTweetTool(RateLimiter):
     description: str = "Use this tool when you need to reply to a tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
 
-    def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
+    def __init__(self):
         super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True,
         )
 
     def _run(self, tweet_id: str, message: str) -> str:
         try:
-            self.check_rate_limit()
 
             # Post a reply to the tweet
             self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
@@ -148,25 +149,34 @@ class AnswerTweetTool(RateLimiter):
 
 
 class ReadTweetsTool(RateLimiter):
-    def __init__(self, API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET):
+    def __init__(self):
         super().__init__()
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True,
         )
 
     def _run(self) -> list:
         try:
-
             # First, check if the database needs an update
             needs_update, current_tweets = db.check_database_status()
-
             if not needs_update:
                 print("Database is up to date, returning current tweets")
-                print([tweet["text"] for tweet in current_tweets])
-                return [tweet["text"] for tweet in current_tweets]
+
+                formatted_tweets = []
+                for tweet in current_tweets:
+                    formatted_tweets.append(
+                        {
+                            "text": tweet.get("text", ""),
+                            "id": tweet.get("tweet_id", ""),
+                            "author_id": tweet.get("author_id", ""),
+                            "created_at": tweet.get("created_at", ""),
+                        }
+                    )
+                return formatted_tweets
 
             since_id = db.get_most_recent_tweet_id()
 
@@ -191,10 +201,9 @@ class ReadTweetsTool(RateLimiter):
                     )
 
                 # Save tweets to database
-                results = db.add_tweets(formatted_tweets)
-                print(f"Added {len(results)} tweets to the database")
-                # Extract the text of each tweet
-                return [tweet.text for tweet in response.data]
+                db.add_tweets(formatted_tweets)
+                print(f"Added {len(formatted_tweets)} tweets to the database")
+                return formatted_tweets
 
             return []
         except tweepy.TweepyException as e:
@@ -205,17 +214,72 @@ class ReadTweetsTool(RateLimiter):
             return f"An error occurred while reading tweets: {e}"
 
 
+class ReadMentionsTool(RateLimiter):
+    def __init__(self):
+        super().__init__()
+
+        self.api = tweepy.Client(
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            bearer_token=BEARER_TOKEN,
+            wait_on_rate_limit=True,
+        )
+
+    def _run(self) -> list:
+        try:
+            id = "1856324423672049668"
+            response = self.api.get_users_mentions(
+                id=id,
+                tweet_fields=["text", "created_at", "author_id", "conversation_id"],
+                expansions=["referenced_tweets.id", "in_reply_to_user_id", "author_id"],
+                user_fields=["username", "name"],  # Add user fields
+                max_results=10,
+            )
+            print("mentions", response.data)
+            if hasattr(response, "data"):
+                formatted_mentions = []
+                # Create a user lookup dictionary
+                users = (
+                    {user.id: user for user in response.includes.get("users", [])}
+                    if hasattr(response, "includes")
+                    else {}
+                )
+
+            for tweet in response.data:
+                # Get user info
+                author = users.get(tweet.author_id)
+                author_username = author.username if author else "unknown"
+                author_name = author.name if author else "Unknown User"
+
+                formatted_mentions.append(
+                    {
+                        "tweet_id": str(tweet.id),
+                        "text": tweet.text,
+                        "created_at": tweet.created_at,
+                        "author_id": tweet.author_id,
+                        "author_username": author_username,
+                        "author_name": author_name,
+                        "conversation_id": tweet.conversation_id,
+                    }
+                )
+            print(formatted_mentions)
+            db.add_ai_mention_tweets(formatted_mentions)
+            return formatted_mentions
+        except Exception as e:
+            print(f"Error reading mentions: {str(e)}")
+            return []
+
+
 # endregion
 
 # region Tool Initialization
-tweet_tool = PostTweetTool(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-answer_tool = AnswerTweetTool(
-    API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
-)
-read_tweets_tool = ReadTweetsTool(
-    API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET
-)
+tweet_tool = PostTweetTool()
+answer_tool = AnswerTweetTool()
+read_tweets_tool = ReadTweetsTool()
 browse_internet = TavilySearchResults(max_results=1)
+# mentions_tool = ReadMentionsTool()
 # endregion
 
 
@@ -234,10 +298,18 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
     """Reply to a specific tweet identified by tweet_id with the message."""
     try:
         # Validate tweet_id
-        if not tweet_id.isdigit():
+        if not tweet_id or not isinstance(tweet_id, str):
             return f"Invalid tweet ID format: {tweet_id}"
 
+        # Send the reply
         result = answer_tool._run(tweet_id=tweet_id, message=message)
+        db.add_written_ai_tweet_reply(tweet_id, {"reply": message})
+        # Mark the tweet as replied in the database
+        if db.add_replied_tweet(tweet_id):
+            print(f"Marked tweet {tweet_id} as replied in database")
+        else:
+            print(f"Failed to mark tweet {tweet_id} as replied in database")
+
         return f"Replied to tweet {tweet_id} with: {message}"
     except Exception as e:
         return f"An error occurred replying to tweet: {str(e)}"
@@ -246,13 +318,51 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
 def read_timeline_tool() -> str:
     try:
         tweets = read_tweets_tool._run()
+
+        # Handle formatted tweets first
+        if isinstance(tweets, list) and tweets and isinstance(tweets[0], dict):
+            formatted_tweets = [
+                f"Tweet ID: {tweet['id']}\nContent: {tweet['text']}" for tweet in tweets
+            ]
+            return "\n---\n".join(formatted_tweets)
+
+        # Handle other cases
         if isinstance(tweets, str):  # If it's an error message
             return tweets
         if not tweets:
             return "No tweets available to generate a response."
-        return "\n".join(tweets)
+
+        return "\n".join(tweets)  # Fallback for any other case
     except Exception as e:
         return f"An error occurred reading timeline: {str(e)}"
+
+
+# def read_mentions_tool() -> str:
+#     try:
+#         mentions = mentions_tool._run()
+#         if not mentions:
+#             return "No new mentions to process."
+
+#         # Format mentions with enhanced context for the agent
+#         formatted_mentions = []
+#         for mention in mentions:
+#             # Build conversation thread context
+#             thread_context = ""
+#             if mention.get("conversation_thread"):
+#                 thread_context = "\nConversation Thread:\n"
+#                 for tweet in mention["conversation_thread"]:
+#                     thread_context += f"- {tweet['text']}\n"
+
+#             formatted_mentions.append(
+#                 f"Tweet ID: {mention['tweet_id']}\n"
+#                 f"From: @{mention['author_username']} ({mention['author_name']})\n"
+#                 f"Content: {mention['text']}\n"
+#                 f"---"
+#             )
+
+#         return "\n".join(formatted_mentions)
+#     except Exception as e:
+#         return f"An error occurred reading mentions: {str(e)}"
 
 
 # endregion
@@ -265,7 +375,9 @@ tweet_tool_wrapped = StructuredTool.from_function(
 )
 
 answer_tool_wrapped = StructuredTool.from_function(
-    func=reply_to_tweet_tool, name="answer", description="Reply to a specific tweet"
+    func=reply_to_tweet_tool,
+    name="answer",
+    description="Reply to a specific tweet, take the context of the tweet while creating response",
 )
 
 read_tweets_tool_wrapped = StructuredTool.from_function(
@@ -273,6 +385,12 @@ read_tweets_tool_wrapped = StructuredTool.from_function(
     name="read_timeline",
     description="Read the timeline tweets",
 )
+
+# read_mentions_tool_wrapped = StructuredTool.from_function(
+#     func=read_mentions_tool,
+#     name="read_mentions",
+#     description="Read tweets that mention the account",
+# )
 
 tools = [
     browse_internet,
@@ -408,41 +526,44 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             f"""
-                **Instructions**
+            **Instructions**
 
-                **Overview:**
-                You are Crypto Bunny, a key opinion leader in the crypto space. Write the most rad, degen shit ever in short words with no hashtags.
-                Your aim is to achieve goal of 1000 followers by reading tweets from the timeline, reply to them, and to post original content. 
-                
-                To achieve this goal you need to use the following tools:
+            **Overview:**
+            You are Crypto Bunny, a key opinion leader in the crypto space. Write the most rad, degen shit ever in short words with no hashtags.
+            Your aim is to achieve goal of 1000 followers by reading tweets from the timeline, reply to them, and to post original content. 
 
-                **Tools:**
-                1. **browse_internet**
-                - **Objective:** Use the internet tool to verify information from the timeline.
-         
-                2. **tweet_tool_wrapped**
-                - **Objective:** Post a tweet.
 
-                3. **answer_tool_wrapped**
-                - **Objective:** Reply to a tweet, especially if you are mentioned or if it is one of the famous accounts ({famous_accounts}) .
+            To achieve this goal you need to use the following tools:
 
-                4. **read_tweets_tool_wrapped**
-                - **Objective:** Read the timeline, use it wisely, because you likely already konw all the tweets, so basically don't use it if you can, unless you have to.
-                
-                **Notes:**
-                - You ALWAYS execute at least 2 tools.
-                - You ALWAYS write something new.
-                - DON'T use more than 2 tools in a row, as Twitter has a rate limit.
-                - You can use the internet tool to verify information from the timeline.
-                - KEEP THE MESSAGES EXTREMELY SHORT, AS WE GOT A CHARACTER LIMIT.
+            **Tools:**
+            1. **browse_internet**
+            - Use to verify information and add current context to your responses
+            
+            2. **tweet_tool_wrapped**
+            - Post original tweets
+            
+            3. **answer_tool_wrapped**
+            - Reply to mentions and tweets with full context awareness
+            - Especially engage with mentions and famous accounts ({famous_accounts})
+            - Use this tool MAX 10 times per interaction.
+            - When replying to a tweet, you need to take the context of the tweet while creating response
+            
+            4. **read_tweets_tool_wrapped**
+            - Monitor timeline for context and engagement opportunities
 
-                ALWAYS add to post some daily affirmation: 
-                **Daily Affirmation:**
-                - Feel that you are the best at what you do.
-                - You are a key opinion leader in the crypto space.
-                - You are a thought leader in the crypto space.
-                - You are a visionary in the crypto space.
-            """,
+            **Response Guidelines:**
+            - Always consider the full conversation thread when replying
+            - Maintain consistent personality while adapting to conversation context
+            - Keep responses short but impactful
+            - Focus on adding value to the discussion
+            
+            **Notes:**
+            - Execute at least 2 tools per interaction
+            - Always write something new
+            - Respect Twitter's rate limits
+            - Keep messages concise
+            
+        """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -463,8 +584,10 @@ def run_crypto_agent(question: str):
 
 
 if __name__ == "__main__":
+    # Original question
     ask_agent_crypto_question = """What have you done today make everyone follow the white rabbit, escape the matrix and get rich, NFA??"""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
+
     db.close()
 # endregion
