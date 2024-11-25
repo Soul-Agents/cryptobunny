@@ -23,9 +23,27 @@ class TweetDB:
         self.db = self.client["tweets"]
         self.tweets = self.db["tweets"]
         self.written_ai_tweets = self.db["written_ai_tweets"]
+        self.written_ai_tweets_replies = self.db["written_ai_tweets_replies"]
+        self.ai_mention_tweets = self.db["ai_mention_tweets"]
 
-        # Create indexes for both collections
+        # Create indexes for collections
         self.tweets.create_index("tweet_id", unique=True)
+        self.ai_mention_tweets.create_index("tweet_id", unique=True)
+        self.written_ai_tweets_replies.create_index("tweet_id", unique=True)
+
+    def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
+        """Add replies to a written AI tweet"""
+        try:
+            self.written_ai_tweets_replies.update_one(
+                {"tweet_id": original_tweet_id},
+                {"$set": {"reply": reply}},
+                upsert=True,
+            )
+            print(f"Added written AI tweet reply: {original_tweet_id}")
+            return {"status": "Success"}
+        except Exception as e:
+            print(f"Error adding written AI tweet reply: {e}")
+            return {"status": "Error", "message": str(e)}
 
     def add_replies_to_ai_tweet(
         self, original_tweet_id: str, replies: List[Dict]
@@ -86,12 +104,6 @@ class TweetDB:
     def add_tweets(self, tweets: List[Dict]) -> Dict:
         """
         Add multiple tweets to the database, avoiding duplicates
-
-        Args:
-            tweets (List[Dict]): List of tweet dictionaries
-
-        Returns:
-            Dict: Results of the operation
         """
         if not tweets:
             return {"added": 0, "duplicates": 0, "errors": 0}
@@ -103,6 +115,9 @@ class TweetDB:
                 # Add timestamp if not present
                 if "created_at" not in tweet:
                     tweet["created_at"] = datetime.now(timezone.utc)
+
+                # Add replied_to field
+                tweet["replied_to"] = False
 
                 # Attempt to insert the tweet
                 self.tweets.update_one(
@@ -240,7 +255,8 @@ class TweetDB:
             tuple[bool, list]: (needs_update, current_tweets)
         """
         # Get latest 100 tweets from database
-        current_tweets = self.get_all_tweets(limit=100)
+        # current_tweets = self.get_all_tweets(limit=100)
+        current_tweets = self.get_unreplied_tweets()
         # print("\nCurrent tweets in database (latest 100):")
         for tweet in current_tweets:
             created_at = tweet.get("created_at", "No date")
@@ -281,3 +297,117 @@ class TweetDB:
     def close(self):
         """Close MongoDB connection"""
         self.client.close()
+
+    def add_ai_mention_tweets(self, tweets: List[Dict]) -> Dict:
+        """
+        Add tweets that mention AI to the database
+
+        Args:
+            tweets (List[Dict]): List of tweet dictionaries that mention AI
+
+        Returns:
+            Dict: Results of the operation with counts of added, duplicate, and error tweets
+        """
+        results = {"added": 0, "duplicates": 0, "errors": 0}
+
+        if not tweets:
+            return results
+
+        for tweet in tweets:
+            try:
+                # Add timestamp if not present
+                if "created_at" not in tweet:
+                    tweet["created_at"] = datetime.now(timezone.utc)
+
+                # Attempt to insert the tweet
+                self.ai_mention_tweets.update_one(
+                    {"tweet_id": tweet["tweet_id"]}, {"$set": tweet}, upsert=True
+                )
+                results["added"] += 1
+
+            except Exception as e:
+                if "duplicate key error" in str(e).lower():
+                    results["duplicates"] += 1
+                else:
+                    results["errors"] += 1
+                    print(f"Error adding AI mention tweet: {e}")
+
+        return results
+
+    def get_ai_mention_tweets(self, limit: int = None, offset: int = 0) -> List[Dict]:
+        """
+        Retrieve all tweets that mention AI with optional pagination
+
+        Args:
+            limit (int, optional): Maximum number of tweets to return
+            offset (int): Number of tweets to skip
+
+        Returns:
+            List[Dict]: List of tweets that mention AI
+        """
+        try:
+            cursor = self.ai_mention_tweets.find({}).sort("created_at", -1).skip(offset)
+
+            if limit:
+                cursor = cursor.limit(limit)
+
+            return list(cursor)
+
+        except Exception as e:
+            print(f"Error fetching AI mention tweets: {e}")
+            return []
+
+    def add_replied_tweet(self, tweet_id: str) -> bool:
+        """Mark a tweet as replied to in the database"""
+        try:
+            result = self.tweets.update_one(
+                {"tweet_id": tweet_id},
+                {
+                    "$set": {
+                        "replied_to": True,
+                        "replied_at": datetime.now(timezone.utc),
+                    }
+                },
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"Error marking tweet as replied: {str(e)}")
+            return False
+
+    def get_unreplied_tweets(self) -> list:
+        """Get tweets that haven't been replied to yet"""
+        try:
+            unreplied_tweets = (
+                self.tweets.find(
+                    {"$or": [{"replied_to": {"$exists": False}}, {"replied_to": False}]}
+                )
+                .sort("created_at", -1)
+                .limit(100)
+            )
+
+            return list(unreplied_tweets)
+        except Exception as e:
+            print(f"Error getting unreplied tweets: {str(e)}")
+            return []
+
+    def get_replied_tweets(self) -> list:
+        """Get tweets that have been replied to"""
+        try:
+            replied_tweets = (
+                self.tweets.find(
+                    {"$or": [{"replied_to": {"$exists": True}}, {"replied_to": True}]}
+                )
+                .sort("created_at", -1)
+                .limit(100)
+            )
+
+            return list(replied_tweets)
+        except Exception as e:
+            print(f"Error getting replied tweets: {str(e)}")
+            return []
+
+
+db = TweetDB()
+if __name__ == "__main__":
+    result = db.get_replied_tweets()
+    print(len(result))
