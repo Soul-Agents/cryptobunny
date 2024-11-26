@@ -407,10 +407,10 @@ class TweetDB:
             return []
 
     def is_ai_tweet(self, tweet_id: str) -> bool:
-        """Check if a tweet was created by the AI"""
+        """Check if a tweet reply was created by the AI"""
         try:
-            # Check in written_ai_tweets collection
-            ai_tweet = self.written_ai_tweets.find_one({"tweet_id": tweet_id})
+            # Check in written_ai_tweets_replies collection
+            ai_tweet = self.written_ai_tweets_replies.find_one({"tweet_id": tweet_id})
             if ai_tweet:
                 return True
 
