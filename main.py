@@ -17,14 +17,20 @@ from db import TweetDB
 print("Starting the agent...")
 
 # region Environment Configuration
-API_KEY = os.environ["API_KEY"]
-API_SECRET_KEY = os.environ["API_SECRET_KEY"]
-BEARER_TOKEN = os.environ["BEARER_TOKEN"]
-ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
-ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
-TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
-API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
-
+# API_KEY = os.environ["API_KEY"]
+# API_SECRET_KEY = os.environ["API_SECRET_KEY"]
+# BEARER_TOKEN = os.environ["BEARER_TOKEN"]
+# ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
+# ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
+# TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
+# API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
+ACCESS_TOKEN = "1856324423672049668-iK97DmPSxMwxcFGrjWKDxylAtOu1Ht"
+ACCESS_TOKEN_SECRET = "eAjzDvjDZ9EM1o7gamf9XSUTZRJq5bScePz5GCe5EDRFr"
+API_KEY = "9mfR0Z3BP2v6bX6BhS1Q1Mfz8"
+API_SECRET_KEY = "EqvEPgjGG58joBySQgeDBE5MO9XgfMdm3YsdNdGLjfBzriBkDu"
+BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAIw7xAEAAAAAvot%2F%2FX8kVIuZkjWLm3nkNXxiZLU%3DpLnxeQlVttgV1rNfpyX4umXVaWP3SNTMCgQBkfEnUhdbTTz7d1"
+API_KEY_OPENAI = "sk-trJNV0X-yBPL-x5DcVymvVKyJ5oqcQfSqLcMBBRIqRT3BlbkFJpBgIac_ntkPfCQ9IjX9j1sm0jMROmX2C_CylYCg6MA"
+TAVILY_API_KEY = "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"
 
 # endregion
 
@@ -301,9 +307,14 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         if not tweet_id or not isinstance(tweet_id, str):
             return f"Invalid tweet ID format: {tweet_id}"
 
+        # Check if this is the AI's own tweet
+        if db.is_ai_tweet(tweet_id):
+            return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
+        sleep(13)
         # Send the reply
         result = answer_tool._run(tweet_id=tweet_id, message=message)
         db.add_written_ai_tweet_reply(tweet_id, {"reply": message})
+
         # Mark the tweet as replied in the database
         if db.add_replied_tweet(tweet_id):
             print(f"Marked tweet {tweet_id} as replied in database")
@@ -742,7 +753,9 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     # Original question
-    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}?"""
+    ask_agent_crypto_question = (
+        """What have you done today to engage with {famous_accounts}?"""
+    )
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
 
