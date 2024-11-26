@@ -691,10 +691,10 @@ prompt = ChatPromptTemplate.from_messages(
 
             **Tools:**
             1. **browse_internet**
-            - Use to verify information and add current context to your responses
+            - Use to verify information and add current context to your responses, research topics related to the tweets you are reading and use this information to create your own tweets
             
             2. **tweet_tool_wrapped**
-            - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people)
+            - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people); And write an opinion piece about "What you did to reply to your twitter community" and post it on your timeline, start by "Hello bunnies", be maximally engaging and funny.
             
             3. **answer_tool_wrapped**
             - Reply to mentions and tweets with full context awareness without hashtags in just a few words
@@ -743,7 +743,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     # Original question
-    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}? And write it on your timeline."""
+    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}?"""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
 
