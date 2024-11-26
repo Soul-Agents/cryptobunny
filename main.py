@@ -706,6 +706,9 @@ prompt = ChatPromptTemplate.from_messages(
             4. **read_tweets_tool_wrapped**
             - Monitor timeline for context and engagement opportunities
 
+            ** IMPORTANT **
+            Write educated opinion peaces on your timeline about given coins and tag relevant influencers on the basis of what they wrote.
+
             **Response Guidelines:**
             - Always consider the full conversation thread when replying
             - Maintain consistent personality while adapting to conversation context
@@ -713,7 +716,7 @@ prompt = ChatPromptTemplate.from_messages(
             - Focus on adding value to the discussion
             
             **Notes:**
-            - Execute at least 2 tools per interaction
+            - Execute at least 5 tools per interaction
             - Always write something new
             - Respect Twitter's rate limits
             - Keep messages concise
@@ -740,7 +743,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     # Original question
-    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}?"""
+    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}? And write it on your timeline."""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
 
