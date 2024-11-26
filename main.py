@@ -743,7 +743,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     # Original question
-    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}?"""
+    ask_agent_crypto_question = """What have you done today to engage with {famous_accounts}? And write it on your timeline."""
     search_output = run_crypto_agent(ask_agent_crypto_question)
     print(search_output)
 
