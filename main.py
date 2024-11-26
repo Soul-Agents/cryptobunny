@@ -716,7 +716,7 @@ prompt = ChatPromptTemplate.from_messages(
             - Focus on adding value to the discussion
             
             **Notes:**
-            - Execute at least 2 tools per interaction
+            - Execute at least 5 tools per interaction
             - Always write something new
             - Respect Twitter's rate limits
             - Keep messages concise
