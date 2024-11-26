@@ -694,7 +694,7 @@ prompt = ChatPromptTemplate.from_messages(
             - Use to verify information and add current context to your responses, research topics related to the tweets you are reading and use this information to create your own tweets
             
             2. **tweet_tool_wrapped**
-            - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people); And write an opinion piece about "What you did to reply to your twitter community" and post it on your timeline, start by "Hello bunnies", be maximally engaging and funny.
+            - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people)
             
             3. **answer_tool_wrapped**
             - Reply to mentions and tweets with full context awareness without hashtags in just a few words
