@@ -720,9 +720,6 @@ prompt = ChatPromptTemplate.from_messages(
             - Always write something new
             - Respect Twitter's rate limits
             - Keep messages concise
-            - Use the tools to add context to your responses
-            - don't forget to write an opinion piece about "What you did to reply to your X community" and post it on your timeline, start by "Hello bunnies", be maximally engaging and funny.
-            
         """,
         ),
         ("placeholder", "{chat_history}"),
