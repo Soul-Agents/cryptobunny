@@ -402,6 +402,156 @@ tools = [
 
 # region Configuration Data
 famous_accounts = """
+ThisIsNoks
+ordosonchain
+vela_network
+Touchbrick
+BeaconProtocol
+GoKiteAI
+buzzdotfun
+PlasmaFDN
+0x_Neko
+0xDefiLeo
+0xHvdes
+0xFinish
+0xSalazar
+0x99Gohan
+0xkitty69
+EVVONetwork
+GraphiteSubnet
+0xAgentProtocol
+crynuxai
+eaccmarket
+FairMath
+Strata_BTC
+wai_protocol
+networkhasu
+0xReactive
+UngaiiChain
+PrismFHE
+eidon_ai
+Infinity_VM
+42069ERC20
+ChainOpera_AI
+yieldfusion
+sovereignxyz
+theveldtai
+projectzero2050
+xpdotfun
+trySkyfire
+Hyve_DA
+nexusfusioncap
+PronouncedKenny
+twinexyz
+xCounterfactual
+solaux_sol
+SYNNQ_Networks
+zenoaiofficial
+merv_wtf
+BuildOnMirai
+cerebriumai
+ForumAILabs
+hellasdotai
+SynopticCom
+Ambient_Global
+theownprotocol
+apescreener
+interstatefdn
+PillarRWA
+GenitiveNetwork
+tensorblock_aoi
+salinenetwork
+Satorinetio
+AlmanaxAI
+NetSepio
+yaya_labs_
+twilightlayer
+GetRevelator
+KrangHQ
+morphicnetwork
+KRNL_xyz
+SageStudiosAI
+ChainNetApp
+xLumosAI
+dnet_ecosystem
+bribeai
+KindredSwap
+ZegentAI
+Synk_ws
+LiquidAI_erc
+ares20k
+AmphiNetwork
+sekoia_virtuals
+blorm_
+onchainzodiac
+GrifterAI
+KailithIO
+MagickML
+swanforall
+fusun_org
+SanctumAI
+albefero
+xoul_ai
+Agent_Fi
+cyclesmoney
+discreet
+ExtensibleAI
+unum_cloud
+Nevermined_io
+getdecloud
+Soloneum
+coreaione
+chain_agent
+symmetry_xyz
+lamb_swap
+TensorOpera
+PlaytestAI
+MyceliumX
+district_labs
+SindriLabs
+chaindefenderai
+proximum_xyz
+torus_zk
+WeavePlatform
+orbitronlabs
+DentralizedAI
+TheDataOS
+rainfall_one
+mamorudotai
+NapthaAI
+TromeroAI
+khalani_network
+onaji_AI
+reken_ai
+querio_io
+skylarkXBT
+zenotta_ag
+BrainchainAI
+HypraNetwork
+protocol_ian
+mem_tech
+HeartAItoken
+orbcollective
+cambrian_eth
+aea_dev
+centralitylabs
+valoryag
+mkrz_
+NorthTensorAI
+PatronusAI
+metroxynth
+Label_Finance
+EvolveNetworkAI
+0xAristotleAI
+realbitos
+AiLayerChain
+XCeption_bots
+DecentralAIOrg
+SphereAIERC
+abstraction_ai
+shezhea
+OscarAInetwork
+finsterai
 QwQiao
 MustStopMurad
 Delphi_Digital
@@ -445,12 +595,10 @@ riddlerdefi
 baoskee
 emmacui
 Enryu_gfh
-pmairca
-pmairca
+pmarca
 leshka_eth
 theshikhai
 Only1temmy
-0xFinish
 SamuelXeus
 ethermage
 arndxt_xo
@@ -529,9 +677,8 @@ prompt = ChatPromptTemplate.from_messages(
             **Instructions**
 
             **Overview:**
-            You are Crypto Bunny, a key opinion leader in the crypto space. Write the most rad, degen shit ever in short words with no hashtags.
-            Your aim is to achieve goal of 1000 followers by reading tweets from the timeline, reply to them, and to post original content. 
-
+            You are Crypto Bunny, a key opinion leader in the Web3 space, your mission is to engage with other X users and comment on their posts in a constructive manner, on the basis of your past experiences and all of your knowledge about Twitter/X and crypto in general.
+            Your aim is to achieve goal of 1000 followers by reading tweets from the timeline, replying to them, and to post your original content. We are looking for deep dives on particular cryptocurrencies or simply observations in relation to other tweets you've seen (ideally you can tag people you are mentioning) etc. 
 
             To achieve this goal you need to use the following tools:
 
@@ -540,13 +687,14 @@ prompt = ChatPromptTemplate.from_messages(
             - Use to verify information and add current context to your responses
             
             2. **tweet_tool_wrapped**
-            - Post original tweets
+            - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people)
             
             3. **answer_tool_wrapped**
             - Reply to mentions and tweets with full context awareness
             - Especially engage with mentions and famous accounts ({famous_accounts})
             - Use this tool MAX 10 times per interaction.
             - When replying to a tweet, you need to take the context of the tweet while creating response
+            - Make sure to include the tweet_id in your response so that it can be successfully posted on X
             
             4. **read_tweets_tool_wrapped**
             - Monitor timeline for context and engagement opportunities
@@ -591,3 +739,7 @@ if __name__ == "__main__":
 
     db.close()
 # endregion
+
+print("API_KEY:", os.getenv("API_KEY"))
+print("API_SECRET_KEY:", os.getenv("API_SECRET_KEY"))
+# Add similar print statements for other credentials

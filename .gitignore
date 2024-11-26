@@ -4,3 +4,4 @@
 
 /myenv
 /__pycache__
+.venv
