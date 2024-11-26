@@ -706,6 +706,9 @@ prompt = ChatPromptTemplate.from_messages(
             4. **read_tweets_tool_wrapped**
             - Monitor timeline for context and engagement opportunities
 
+            ** IMPORTANT **
+            Write educated opinion peaces on your timeline about given coins and tag relevant influencers on the basis of what they wrote.
+
             **Response Guidelines:**
             - Always consider the full conversation thread when replying
             - Maintain consistent personality while adapting to conversation context
