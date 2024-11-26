@@ -6,7 +6,10 @@ import os
 from schemas import ReplyToAITweet, BaseTweet
 
 
-MONGODB_URI = os.environ["MONGODB_URI"]
+# MONGODB_URI = os.environ["MONGODB_URI"]
+MONGODB_URI = (
+    "mongodb://mongo:GnIJsgCAsqjGzXYWrOhbpTdpEWWVpEEI@autorack.proxy.rlwy.net:20543"
+)
 
 
 class TweetDB:
@@ -406,8 +409,20 @@ class TweetDB:
             print(f"Error getting replied tweets: {str(e)}")
             return []
 
+    def is_ai_tweet(self, tweet_id: str) -> bool:
+        """Check if a tweet was created by the AI"""
+        try:
+            # Check in written_ai_tweets collection
+            ai_tweet = self.written_ai_tweets.find_one({"tweet_id": tweet_id})
+            if ai_tweet:
+                return True
 
-db = TweetDB()
-if __name__ == "__main__":
-    result = db.get_replied_tweets()
-    print(len(result))
+        except Exception as e:
+            print(f"Error checking if tweet is from AI: {e}")
+            return False
+
+
+# db = TweetDB()
+# if __name__ == "__main__":
+#     result = db.is_ai_tweet("1861514930819936281")
+#     print(result)
