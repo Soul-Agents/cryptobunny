@@ -716,10 +716,12 @@ prompt = ChatPromptTemplate.from_messages(
             - Focus on adding value to the discussion
             
             **Notes:**
-            - Execute at least 5 tools per interaction
+            - Execute at least 3 tools per interaction
             - Always write something new
             - Respect Twitter's rate limits
             - Keep messages concise
+            - Use the tools to add context to your responses
+            - don't forget to write an opinion piece about "What you did to reply to your X community" and post it on your timeline, start by "Hello bunnies", be maximally engaging and funny.
             
         """,
         ),
