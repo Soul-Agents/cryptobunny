@@ -307,7 +307,7 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         sleep(13)
         # Send the reply
         result = answer_tool._run(tweet_id=tweet_id, message=message)
-        db.add_written_ai_tweet_reply(tweet_id, {"reply": message})
+        db.add_written_ai_tweet_reply(tweet_id, message)
 
         # Mark the tweet as replied in the database
         if db.add_replied_tweet(tweet_id):
@@ -704,7 +704,8 @@ prompt = ChatPromptTemplate.from_messages(
             3. **answer_tool_wrapped**
             - Reply to mentions and tweets with full context awareness without hashtags in just a few words
             - Especially engage with mentions and famous accounts ({famous_accounts})
-            - Use this tool MAX 10 times per interaction.
+            - Use this tool MAX 5 times per interaction.
+            - Don't answer to your own tweets or replies
             - When replying to a tweet, you need to take the context of the tweet while creating response
             - Make sure to include the tweet_id in your response so that it can be successfully posted on X and keep it concise
             
