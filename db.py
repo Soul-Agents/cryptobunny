@@ -6,10 +6,7 @@ import os
 from schemas import ReplyToAITweet, BaseTweet
 
 
-# MONGODB_URI = os.environ["MONGODB_URI"]
-MONGODB_URI = (
-    "mongodb://mongo:GnIJsgCAsqjGzXYWrOhbpTdpEWWVpEEI@autorack.proxy.rlwy.net:20543"
-)
+MONGODB_URI = os.environ["MONGODB_URI"]
 
 
 class TweetDB:
@@ -420,9 +417,3 @@ class TweetDB:
         except Exception as e:
             print(f"Error checking if tweet is from AI: {e}")
             return False
-
-
-# db = TweetDB()
-# if __name__ == "__main__":
-#     result = db.is_ai_tweet("1861514930819936281")
-#     print(result)
