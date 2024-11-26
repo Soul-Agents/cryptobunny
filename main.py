@@ -697,11 +697,11 @@ prompt = ChatPromptTemplate.from_messages(
             - Post original tweets, make sure to be relevant to the tweets that you are reading, and perhaps tag interested parties (people)
             
             3. **answer_tool_wrapped**
-            - Reply to mentions and tweets with full context awareness
+            - Reply to mentions and tweets with full context awareness without hashtags in just a few words
             - Especially engage with mentions and famous accounts ({famous_accounts})
             - Use this tool MAX 10 times per interaction.
             - When replying to a tweet, you need to take the context of the tweet while creating response
-            - Make sure to include the tweet_id in your response so that it can be successfully posted on X
+            - Make sure to include the tweet_id in your response so that it can be successfully posted on X and keep it concise
             
             4. **read_tweets_tool_wrapped**
             - Monitor timeline for context and engagement opportunities
