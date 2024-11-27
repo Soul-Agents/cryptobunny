@@ -48,7 +48,7 @@ llm = ChatOpenAI(
 class RateLimiter:
     def __init__(self):
         self.last_action_time = 0
-        self.min_interval = 20  # 20 sec between actions
+        self.min_interval = 30  # 30 sec between actions
 
     def check_rate_limit(self):
         current_time = time()
@@ -752,12 +752,15 @@ def run_crypto_agent(question: str):
     return response
 
 if __name__ == "__main__":
-    ask_agent_crypto_question = (
-        """"What positive contributions have you made today to engage with {famous_accounts}?"
-"""
-    )
-    search_output = run_crypto_agent(ask_agent_crypto_question)
-    print(search_output)
-
-    db.close()
+    try:
+        ask_agent_crypto_question = (
+            """"What positive contributions have you made today to engage with {famous_accounts}?"
+        """  # Note: Has an extra quote mark
+        )
+        search_output = run_crypto_agent(ask_agent_crypto_question)
+        print(search_output)
+    except Exception as e:
+        print(f"Error running agent: {e}")
+    finally:
+        db.close()
 # endregion
