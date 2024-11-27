@@ -36,8 +36,15 @@ class TweetDB:
         # Set update threshold
         self.update_threshold = timedelta(minutes=60)
 
-        # Initialize MongoDB connection
-        self.client = MongoClient(connection_string)
+        # Initialize MongoDB connection with stricter timeouts
+        self.client = MongoClient(
+            connection_string,
+            serverSelectionTimeoutMS=5000,  # 5 seconds
+            connectTimeoutMS=5000,          # 5 seconds
+            socketTimeoutMS=5000,           # 5 seconds
+            retryWrites=False,              # Don't retry writes
+            retryReads=False               # Don't retry reads
+        )
         
         # Initialize database and collections
         self.db = self.client["tweets"]
@@ -50,6 +57,14 @@ class TweetDB:
         self.tweets.create_index("tweet_id", unique=True)
         self.ai_mention_tweets.create_index("tweet_id", unique=True)
         self.written_ai_tweets_replies.create_index("tweet_id", unique=True)
+
+        # Test connection with timeout
+        try:
+            self.client.admin.command('ping', maxTimeMS=5000)
+            print("Successfully connected to MongoDB")
+        except Exception as e:
+            print(f"Failed to connect to MongoDB: {e}")
+            raise
 
     def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
         """Add replies to a written AI tweet"""
@@ -316,7 +331,9 @@ class TweetDB:
 
     def close(self):
         """Close MongoDB connection"""
-        self.client.close()
+        if hasattr(self, 'client'):
+            self.client.close()
+            print("MongoDB connection closed")
 
     def add_ai_mention_tweets(self, tweets: List[Dict]) -> Dict:
         """
@@ -437,3 +454,9 @@ class TweetDB:
         except Exception as e:
             print(f"Error checking if tweet is from AI: {e}")
             return False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
