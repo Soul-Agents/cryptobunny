@@ -47,21 +47,27 @@ llm = ChatOpenAI(
 
 # region Twitter Service Classes
 class RateLimiter:
-    def __init__(self):
+    def __init__(self, min_interval: int = 30, tool_name: str = ""):
         self.last_action_time = 0
-        self.min_interval = 30  # 30 sec between actions
-
-    def check_rate_limit(self):
+        self.min_interval = min_interval  # configurable interval
+        self.tool_name = tool_name or self.__class__.__name__
+        
+    def check_rate_limit(self) -> None:
+        """Check and enforce rate limiting with improved logging"""
         current_time = time()
         time_since_last_action = current_time - self.last_action_time
 
         if time_since_last_action < self.min_interval:
             wait_time = self.min_interval - time_since_last_action
             print(
-                f"Rate limit: Waiting {wait_time:.1f} seconds before taking action again..."
+                f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds..."
             )
-            sleep(wait_time)
-
+            try:
+                sleep(wait_time)
+            except KeyboardInterrupt:
+                print(f"\n[{self.tool_name}] Rate limit wait interrupted")
+                raise
+            
         self.last_action_time = current_time
 
 
@@ -70,8 +76,8 @@ class PostTweetTool(RateLimiter):
     description: str = "Post a tweet with the given message"
 
     def __init__(self):
-        # Initialize the parent RateLimiter class
-        super().__init__()
+        # Initialize with custom interval
+        super().__init__(min_interval=15, tool_name="PostTweet")
 
         # Initialize OAuth1Session with credentials
         self.oauth = OAuth1Session(
@@ -125,7 +131,8 @@ class AnswerTweetTool(RateLimiter):
     args_schema: Type[BaseModel] = AnswerTweetInput
 
     def __init__(self):
-        super().__init__()
+        # Initialize with custom interval
+        super().__init__(min_interval=30, tool_name="AnswerTweet")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -151,7 +158,8 @@ class AnswerTweetTool(RateLimiter):
 
 class ReadTweetsTool(RateLimiter):
     def __init__(self):
-        super().__init__()
+        # Initialize with custom interval
+        super().__init__(min_interval=60, tool_name="ReadTweets")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -279,7 +287,13 @@ class ReadMentionsTool(RateLimiter):
 tweet_tool = PostTweetTool()
 answer_tool = AnswerTweetTool()
 read_tweets_tool = ReadTweetsTool()
-browse_internet = TavilySearchResults(max_results=1)
+browse_internet = TavilySearchResults(
+    max_results=1,
+    search_params={
+        "include_domains": ["twitter.com", "x.com", "coindesk.com", "cointelegraph.com"],
+        "recency_days": 7,  # Only get results from the last week
+    }
+)
 # mentions_tool = ReadMentionsTool()
 # endregion
 
@@ -724,13 +738,8 @@ prompt = ChatPromptTemplate.from_messages(
         - Stay Specific: Reference details from the original tweet
         - Keep it Concise: Brief, impactful responses that prioritize substance
 
-        **Example High-Quality Responses:**
-        - Market Analysis: "The 30% BTC correction aligns with historical patterns. Key support at $42k shows promising strength based on order book depth and on-chain metrics."
-        - Protocol Discussion: "Your L2 scaling approach presents interesting data availability trade-offs. The innovative use of validity proofs could set a new standard for throughput optimization."
-        - Technical Insight: "Recent MEV patterns indicate evolving builder dynamics. On-chain data suggests improved network efficiency and reduced negative externalities."
-
-        Execute at least 3 tools per interaction and prioritize substantive, technical engagement.
-        """,
+            Execute exactly TWO tools per interaction and prioritize substantive, technical engagement. Try to always use the reply tool.
+            """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
