@@ -11,20 +11,21 @@ from langchain_core.prompts import ChatPromptTemplate
 import os
 from time import time, sleep
 from db import TweetDB
+from dotenv import load_dotenv
 
-
-# endregion
-print("Starting the agent...")
+# Load environment variables
+load_dotenv()
 
 # region Environment Configuration
-API_KEY = os.environ["API_KEY"]
-API_SECRET_KEY = os.environ["API_SECRET_KEY"]
-BEARER_TOKEN = os.environ["BEARER_TOKEN"]
-ACCESS_TOKEN = os.environ["ACCESS_TOKEN"]
-ACCESS_TOKEN_SECRET = os.environ["ACCESS_TOKEN_SECRET"]
-TAVILY_API_KEY = os.environ["TAVILY_API_KEY"]
-API_KEY_OPENAI = os.environ["API_KEY_OPENAI"]
-
+API_KEY = os.getenv("API_KEY")
+API_SECRET_KEY = os.getenv("API_SECRET_KEY")
+BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
+MONGODB_URI = os.getenv("MONGODB_URI")
+MONGODB_URL = os.getenv("MONGODB_URL")
 
 # endregion
 
