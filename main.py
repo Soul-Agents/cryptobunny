@@ -754,8 +754,7 @@ def run_crypto_agent(question: str):
 if __name__ == "__main__":
     try:
         ask_agent_crypto_question = (
-            """"What positive contributions have you made today to engage with {famous_accounts}?"
-        """  # Note: Has an extra quote mark
+            """"What positive contributions have you made today to engage with {famous_accounts}? I love you all!"""
         )
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
