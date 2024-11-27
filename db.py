@@ -2,34 +2,56 @@ from pymongo import MongoClient
 from typing import List, Dict
 from datetime import datetime, timezone, timedelta
 import os
+from dotenv import load_dotenv
 
 from schemas import ReplyToAITweet, BaseTweet
 
+# Load environment variables from .env file
+load_dotenv()
 
-MONGODB_URI = os.environ["MONGODB_URI"]
+# Get MongoDB connection strings from environment
+MONGODB_URL = os.getenv("MONGODB_URL")
+MONGODB_URI = os.getenv("MONGODB_URI")
 
 
 class TweetDB:
     def __init__(self):
         """Initialize MongoDB connection using environment variables"""
-
-        if not MONGODB_URI:
-            raise ValueError("MONGODB_URI not found in environment variables")
-
-        print("Initializing database connection...")
+        
+        # Set update threshold
         self.update_threshold = timedelta(minutes=60)
+        
+        # Debug prints
+        print("Environment variables:")
+        print(f"MONGODB_URL: {MONGODB_URL}")
+        print(f"MONGODB_URI: {MONGODB_URI}")
+        
+        # Use MONGODB_URI as it's the recommended public URL
+        connection_string = MONGODB_URI
+        
+        if not connection_string:
+            raise ValueError("MONGODB_URI not found in environment variables")
+            
+        print("Initializing database connection...")
+        print(f"Attempting to connect with: {connection_string}")
+        
         # Connect to MongoDB
-        self.client = MongoClient(MONGODB_URI)
-        self.db = self.client["tweets"]
-        self.tweets = self.db["tweets"]
-        self.written_ai_tweets = self.db["written_ai_tweets"]
-        self.written_ai_tweets_replies = self.db["written_ai_tweets_replies"]
-        self.ai_mention_tweets = self.db["ai_mention_tweets"]
-
-        # Create indexes for collections
+        self.client = MongoClient(connection_string)
+        
+        # Initialize database and collections
+        self.db = self.client.tweets
+        self.tweets = self.db.tweets
+        self.ai_tweets = self.db.ai_tweets
+        self.ai_mention_tweets = self.db.ai_mention_tweets
+        self.written_ai_tweets = self.db.written_ai_tweets
+        self.written_ai_tweets_replies = self.db.written_ai_tweets_replies
+        self.replies_to_ai_tweets = self.db.replies_to_ai_tweets
+        
+        # Create indexes
         self.tweets.create_index("tweet_id", unique=True)
+        self.ai_tweets.create_index("tweet_id", unique=True)
         self.ai_mention_tweets.create_index("tweet_id", unique=True)
-        self.written_ai_tweets_replies.create_index("tweet_id", unique=True)
+        self.written_ai_tweets.create_index("tweet_id", unique=True)
 
     def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
         """Add replies to a written AI tweet"""
