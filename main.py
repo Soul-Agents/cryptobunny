@@ -178,7 +178,7 @@ class ReadTweetsTool(RateLimiter):
                     formatted_tweets.append(
                         {
                             "text": tweet.get("text", ""),
-                            "id": tweet.get("tweet_id", ""),
+                            "tweet_id": tweet.get("tweet_id", ""),
                             "author_id": tweet.get("author_id", ""),
                             "created_at": tweet.get("created_at", ""),
                         }
@@ -345,7 +345,8 @@ def read_timeline_tool() -> str:
         # Handle formatted tweets first
         if isinstance(tweets, list) and tweets and isinstance(tweets[0], dict):
             formatted_tweets = [
-                f"Tweet ID: {tweet['id']}\nContent: {tweet['text']}" for tweet in tweets
+                f"Tweet ID: {tweet['tweet_id']}\nContent: {tweet['text']}"
+                for tweet in tweets
             ]
             return "\n---\n".join(formatted_tweets)
 
