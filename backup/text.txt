@@ -1,0 +1,144 @@
+Complete Setup Guide for CryptoBunny Bot on DigitalOcean
+1. Initial Droplet Creation
+# Created Ubuntu 22.04 LTS Droplet on DigitalOcean
+- Basic Plan with 2GB RAM / 1 CPU ($12/month)
+- Frankfurt region selected
+- SSH key authentication
+
+2. Initial Server Access & Setup
+# SSH into the droplet
+ssh root@167.172.161.234
+
+# Update system packages
+sudo apt update
+sudo apt upgrade -y
+
+# Install required packages
+sudo apt install python3-pip python3-venv git supervisor -y
+
+3. Project Directory Setup
+# Create project directories
+mkdir -p /home/cryptobunny/cryptobunny
+cd /home/cryptobunny/cryptobunny
+
+# Create dedicated user
+adduser cryptobunny
+usermod -aG sudo cryptobunny
+
+# Set correct permissions
+chown -R cryptobunny:cryptobunny /home/cryptobunny
+
+4. File Transfer from Local Machine
+# From local PowerShell, copy project files
+scp .\adag1o.ipynb root@167.172.161.234:/home/cryptobunny/cryptobunny/
+scp .\soul_agents.ipynb root@167.172.161.234:/home/cryptobunny/cryptobunny/
+
+5. Python Environment Setup
+# Create and activate virtual environment
+python3 -m venv /home/cryptobunny/cryptobunny/venv
+source /home/cryptobunny/cryptobunny/venv/bin/activate
+
+# Install required packages
+pip install tweepy requests-oauthlib pydantic langchain
+
+6. Main Script Creation
+# Create main.py
+nano /home/cryptobunny/cryptobunny/main.py
+
+
+the below code:
+
+# Content of main.py
+import os
+import time
+import tweepy
+from requests_oauthlib import OAuth1Session
+import logging
+
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# Twitter API credentials
+API_KEY = "your_api_key"
+API_SECRET_KEY = "your_api_secret"
+BEARER_TOKEN = "your_bearer_token"
+ACCESS_TOKEN = "your_access_token"
+ACCESS_TOKEN_SECRET = "your_access_token_secret"
+
+# Initialize Twitter client
+client = tweepy.Client(
+    consumer_key=API_KEY,
+    consumer_secret=API_SECRET_KEY,
+    access_token=ACCESS_TOKEN,
+    access_token_secret=ACCESS_TOKEN_SECRET
+)
+
+def main():
+    try:
+        logging.info("Bot started successfully!")
+        while True:
+            logging.info("Bot is running...")
+            # Your bot logic here
+            time.sleep(60)
+    except Exception as e:
+        logging.error(f"An error occurred: {str(e)}")
+
+if __name__ == "__main__":
+    main()
+
+    
+
+7. Supervisor Configuration
+# Create supervisor config
+sudo nano /etc/supervisor/conf.d/cryptobunny.conf
+
+[program:cryptobunny]
+directory=/home/cryptobunny/cryptobunny
+command=/home/cryptobunny/cryptobunny/venv/bin/python main.py
+user=cryptobunny
+autostart=true
+autorestart=true
+stderr_logfile=/var/log/cryptobunny/err.log
+stdout_logfile=/var/log/cryptobunny/out.log
+environment=
+    PYTHONPATH="/home/cryptobunny/cryptobunny/venv/lib/python3.12/site-packages"
+stopsignal=QUIT
+
+8. Log Directory Setup
+# Create log directory
+sudo mkdir -p /var/log/cryptobunny
+sudo chown -R cryptobunny:cryptobunny /var/log/cryptobunny
+
+
+9. Supervisor Service Management
+# Reload and start supervisor
+sudo supervisorctl reread
+sudo supervisorctl update
+sudo supervisorctl restart cryptobunny
+
+10. Monitoring Commands
+# Check supervisor status
+sudo supervisorctl status cryptobunny
+
+# View logs
+tail -f /var/log/cryptobunny/err.log
+tail -f /var/log/cryptobunny/out.log
+
+# Check process
+ps aux | grep python
+
+11. Permissions Setup
+# Ensure correct permissions
+sudo chown -R cryptobunny:cryptobunny /home/cryptobunny/cryptobunny
+sudo chmod -R 755 /home/cryptobunny/cryptobunny
+
+Important Notes:
+Always keep API credentials secure
+Monitor logs regularly
+Ensure proper error handling in the script
+Regular backups recommended
+Keep system packages updated
+Would you like me to elaborate on any of these steps or add additional details to any section?
