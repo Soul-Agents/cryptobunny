@@ -51,7 +51,7 @@ class RateLimiter:
         self.last_action_time = 0
         self.min_interval = min_interval  # configurable interval
         self.tool_name = tool_name or self.__class__.__name__
-        
+
     def check_rate_limit(self) -> None:
         """Check and enforce rate limiting with improved logging"""
         current_time = time()
@@ -59,15 +59,13 @@ class RateLimiter:
 
         if time_since_last_action < self.min_interval:
             wait_time = self.min_interval - time_since_last_action
-            print(
-                f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds..."
-            )
+            print(f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds...")
             try:
                 sleep(wait_time)
             except KeyboardInterrupt:
                 print(f"\n[{self.tool_name}] Rate limit wait interrupted")
                 raise
-            
+
         self.last_action_time = current_time
 
 
@@ -290,9 +288,14 @@ read_tweets_tool = ReadTweetsTool()
 browse_internet = TavilySearchResults(
     max_results=1,
     search_params={
-        "include_domains": ["twitter.com", "x.com", "coindesk.com", "cointelegraph.com"],
+        "include_domains": [
+            "twitter.com",
+            "x.com",
+            "coindesk.com",
+            "cointelegraph.com",
+        ],
         "recency_days": 7,  # Only get results from the last week
-    }
+    },
 )
 # mentions_tool = ReadMentionsTool()
 # endregion
@@ -740,7 +743,7 @@ prompt = ChatPromptTemplate.from_messages(
             - No hashtags
 
             Execute EXACTLY TWO tools per interaction.
-            """
+            """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
@@ -762,11 +765,10 @@ def run_crypto_agent(question: str):
     print("Follow the white rabbit, escape the matrix.")  # Add encouragement message
     return response
 
+
 if __name__ == "__main__":
     try:
-        ask_agent_crypto_question = (
-            """"What positive contributions have you made today to engage with {famous_accounts}? I love you all!"""
-        )
+        ask_agent_crypto_question = """"What positive contributions have you made today to engage with {famous_accounts}? I love you all!"""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
     except Exception as e:
