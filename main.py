@@ -85,11 +85,27 @@ class PostTweetTool(RateLimiter):
             resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
 
+    def _refresh_oauth_session(self):
+        """Refresh the OAuth session if needed"""
+        self.oauth = OAuth1Session(
+            client_key=API_KEY,
+            client_secret=API_SECRET_KEY,
+            resource_owner_key=ACCESS_TOKEN,
+            resource_owner_secret=ACCESS_TOKEN_SECRET,
+        )
+
     def post_tweet(self, message: str):
         try:
             self.check_rate_limit()
+            # Refresh session before posting
+            self._refresh_oauth_session()
+            
             # Prepare the payload
             payload = {"text": message}
+
+            # Add error logging to debug issues
+            print(f"Attempting to post tweet: {message[:20]}...")
+            print(f"OAuth session active: {self.oauth is not None}")
 
             # Make the request to Twitter API v2
             response = self.oauth.post(
@@ -97,20 +113,23 @@ class PostTweetTool(RateLimiter):
                 json=payload,
             )
 
-            # Check response
+            # Add response status logging
+            print(f"Response status: {response.status_code}")
             if response.status_code != 201:
-                raise Exception(
-                    "Request returned an error: {} {}".format(
-                        response.status_code, response.text
-                    )
-                )
+                print(f"Full error response: {response.text}")
+                raise Exception(f"Request returned an error: {response.status_code} {response.text}")
 
             print("Tweet posted successfully!")
             print("tweet data", response.json()["data"])
+            
             # Add tweet to database
             # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
-            tweet = response.json()["data"]
-            db.add_written_ai_tweet(tweet)
+            try:
+                tweet = response.json()["data"]
+                db.add_written_ai_tweet(tweet)
+            except Exception as db_error:
+                print(f"Tweet posted but database update failed: {db_error}")
+            
             return response.json()
 
         except Exception as e:
