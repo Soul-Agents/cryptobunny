@@ -100,10 +100,15 @@ class PostTweetTool(RateLimiter):
             resource_owner_key=ACCESS_TOKEN,
             resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
+        self.oauth.headers.update({
+            "Content-Type": "application/json",
+            "User-Agent": "v2TweetPoster",
+            "X-User-Agent": "v2TweetPoster"
+        })
 
-    async def post_tweet(self, message: str):
+    def _run(self, message: str):
         try:
-            await self.check_rate_limit()  # Assuming RateLimiter.check_rate_limit is async
+            self.check_rate_limit()
             # Refresh session before posting
             self._refresh_oauth_session()
             
@@ -114,7 +119,7 @@ class PostTweetTool(RateLimiter):
             print(f"Attempting to post tweet: {message[:20]}...")
             print(f"OAuth session active: {self.oauth is not None}")
 
-            # Make the request to Twitter API v2 with explicit version in URL
+            # Make the request to Twitter API v2
             response = self.oauth.post(
                 "https://api.twitter.com/2/tweets",
                 json=payload,
@@ -127,31 +132,25 @@ class PostTweetTool(RateLimiter):
                 raise Exception(f"Request returned an error: {response.status_code} {response.text}")
 
             print("Tweet posted successfully!")
-            print("tweet data", response.json()["data"])
+            
+            response_data = response.json()
+            print("tweet data", response_data["data"])
             
             # Add tweet to database
             # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
             try:
-                tweet = response.json()["data"]
-                async with get_db() as db:  # Use async context manager
-                    await db.add_written_ai_tweet(tweet)
+                db.add_written_ai_tweet(response_data["data"])
             except Exception as db_error:
                 print(f"Tweet posted but database update failed: {db_error}")
                 
-            return response.json()
+            return response_data
 
         except Exception as e:
             print(f"Error posting tweet: {str(e)}")
             return None
 
-    async def _arun(self, message: str):
-        """Required for async tool compatibility"""
-        return await self.post_tweet(message)
-
-    def _run(self, message: str):
-        """Required for sync tool compatibility"""
-        import asyncio
-        return asyncio.run(self.post_tweet(message))
+    def _arun(self, message: str):
+        return self._run(message)  # Use sync version
 
 
 class AnswerTweetInput(BaseModel):
@@ -175,26 +174,24 @@ class AnswerTweetTool(RateLimiter):
             wait_on_rate_limit=True,
         )
 
-    async def _run(self, tweet_id: str, message: str) -> str:
+    def _run(self, tweet_id: str, message: str) -> str:
         try:
-            await self.check_rate_limit()
+            self.check_rate_limit()
 
             # Validate tweet_id
             if not tweet_id or not isinstance(tweet_id, str):
                 return f"Invalid tweet ID format: {tweet_id}"
 
             # Check if this is the AI's own tweet
-            async with get_db() as db:
-                if await db.is_ai_tweet(tweet_id):
-                    return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
+            if db.is_ai_tweet(tweet_id):
+                return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
 
             # Post a reply to the tweet
             response = self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
             
             # Add to database
-            async with get_db() as db:
-                await db.add_written_ai_tweet_reply(tweet_id, message)
-                await db.add_replied_tweet(tweet_id)
+            db.add_written_ai_tweet_reply(tweet_id, message)
+            db.add_replied_tweet(tweet_id)
             
             return "Reply tweet posted successfully!"
         except tweepy.TweepyException as e:
@@ -202,8 +199,8 @@ class AnswerTweetTool(RateLimiter):
         except Exception as e:
             return f"An error occurred answering tweet: {e}"
 
-    async def _arun(self, tweet_id: str, message: str) -> str:
-        return await self._run(tweet_id, message)
+    def _arun(self, tweet_id: str, message: str) -> str:
+        return self._run(tweet_id, message)  # Use sync version
 
 
 class ReadTweetsTool(RateLimiter):
@@ -218,11 +215,11 @@ class ReadTweetsTool(RateLimiter):
             wait_on_rate_limit=True,
         )
 
-    async def _run(self) -> list:
+    def _run(self) -> list:  # Keep sync
         try:
             # First, check if the database needs an update
-            async with get_db() as db:
-                needs_update, current_tweets = await db.check_database_status()
+            with get_db() as db:  # Use sync context
+                needs_update, current_tweets = db.check_database_status()
                 if not needs_update:
                     print("Database is up to date, returning current tweets")
 
@@ -238,9 +235,9 @@ class ReadTweetsTool(RateLimiter):
                         )
                     return formatted_tweets
 
-                since_id = await db.get_most_recent_tweet_id()
+                since_id = db.get_most_recent_tweet_id()
 
-            await self.check_rate_limit()
+            self.check_rate_limit()
 
             # Fetch the home timeline tweets
             response = self.api.get_home_timeline(
@@ -261,8 +258,8 @@ class ReadTweetsTool(RateLimiter):
                     )
 
                 # Save tweets to database
-                async with get_db() as db:
-                    await db.add_tweets(formatted_tweets)
+                with get_db() as db:
+                    db.add_tweets(formatted_tweets)
                 print(f"Added {len(formatted_tweets)} tweets to the database")
                 return formatted_tweets
 
@@ -274,8 +271,8 @@ class ReadTweetsTool(RateLimiter):
             print(f"An unexpected error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
 
-    async def _arun(self) -> list:
-        return await self._run()
+    def _arun(self) -> list:
+        return self._run()  # Use sync version
 
 
 class ReadMentionsTool(RateLimiter):
@@ -362,8 +359,8 @@ browse_internet = TavilySearchResults(
 def post_tweet_tool(message: str) -> str:
     """Post a tweet with the message you decide is the most proper."""
     try:
-        # Use the already instantiated tweet_tool instead of post_tweet
-        tweet_tool.post_tweet(message)
+        # Use synchronous version
+        result = tweet_tool._run(message)  # Use _run instead of post_tweet
         return f"Posted tweet: {message}"
     except Exception as e:
         return f"An error occurred posting tweet: {str(e)}"
@@ -379,8 +376,10 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         # Check if this is the AI's own tweet
         if db.is_ai_tweet(tweet_id):
             return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
-        sleep(13)
-        # Send the reply
+        
+        sleep(13)  # Rate limiting
+        
+        # Send the reply using synchronous version
         result = answer_tool._run(tweet_id=tweet_id, message=message)
         db.add_written_ai_tweet_reply(tweet_id, message)
 
