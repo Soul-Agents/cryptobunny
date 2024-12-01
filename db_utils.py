@@ -1,12 +1,12 @@
-from contextlib import contextmanager
-from typing import Generator
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 from db import TweetDB
 
 
-@contextmanager
-def get_db() -> Generator[TweetDB, None, None]:
+@asynccontextmanager
+async def get_db() -> AsyncGenerator[TweetDB, None]:
     db = TweetDB()
     try:
         yield db
     finally:
-        db.close()
+        await db.close()

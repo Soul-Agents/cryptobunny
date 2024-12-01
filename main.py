@@ -11,6 +11,7 @@ from langchain_core.prompts import ChatPromptTemplate
 import os
 from time import time, sleep
 from db import TweetDB
+from db_utils import get_db
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -100,9 +101,9 @@ class PostTweetTool(RateLimiter):
             resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
 
-    def post_tweet(self, message: str):
+    async def post_tweet(self, message: str):
         try:
-            self.check_rate_limit()
+            await self.check_rate_limit()  # Assuming RateLimiter.check_rate_limit is async
             # Refresh session before posting
             self._refresh_oauth_session()
             
@@ -132,7 +133,8 @@ class PostTweetTool(RateLimiter):
             # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
             try:
                 tweet = response.json()["data"]
-                db.add_written_ai_tweet(tweet)
+                async with get_db() as db:  # Use async context manager
+                    await db.add_written_ai_tweet(tweet)
             except Exception as db_error:
                 print(f"Tweet posted but database update failed: {db_error}")
                 
@@ -141,6 +143,15 @@ class PostTweetTool(RateLimiter):
         except Exception as e:
             print(f"Error posting tweet: {str(e)}")
             return None
+
+    async def _arun(self, message: str):
+        """Required for async tool compatibility"""
+        return await self.post_tweet(message)
+
+    def _run(self, message: str):
+        """Required for sync tool compatibility"""
+        import asyncio
+        return asyncio.run(self.post_tweet(message))
 
 
 class AnswerTweetInput(BaseModel):
@@ -164,19 +175,35 @@ class AnswerTweetTool(RateLimiter):
             wait_on_rate_limit=True,
         )
 
-    def _run(self, tweet_id: str, message: str) -> str:
+    async def _run(self, tweet_id: str, message: str) -> str:
         try:
+            await self.check_rate_limit()
+
+            # Validate tweet_id
+            if not tweet_id or not isinstance(tweet_id, str):
+                return f"Invalid tweet ID format: {tweet_id}"
+
+            # Check if this is the AI's own tweet
+            async with get_db() as db:
+                if await db.is_ai_tweet(tweet_id):
+                    return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
 
             # Post a reply to the tweet
-            self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
+            response = self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
+            
+            # Add to database
+            async with get_db() as db:
+                await db.add_written_ai_tweet_reply(tweet_id, message)
+                await db.add_replied_tweet(tweet_id)
+            
             return "Reply tweet posted successfully!"
         except tweepy.TweepyException as e:
             return f"Tweepy error occurred: {str(e)}"
         except Exception as e:
             return f"An error occurred answering tweet: {e}"
 
-    async def _arun(self):
-        return "Not implemented"
+    async def _arun(self, tweet_id: str, message: str) -> str:
+        return await self._run(tweet_id, message)
 
 
 class ReadTweetsTool(RateLimiter):
@@ -191,28 +218,29 @@ class ReadTweetsTool(RateLimiter):
             wait_on_rate_limit=True,
         )
 
-    def _run(self) -> list:
+    async def _run(self) -> list:
         try:
             # First, check if the database needs an update
-            needs_update, current_tweets = db.check_database_status()
-            if not needs_update:
-                print("Database is up to date, returning current tweets")
+            async with get_db() as db:
+                needs_update, current_tweets = await db.check_database_status()
+                if not needs_update:
+                    print("Database is up to date, returning current tweets")
 
-                formatted_tweets = []
-                for tweet in current_tweets:
-                    formatted_tweets.append(
-                        {
-                            "text": tweet.get("text", ""),
-                            "tweet_id": tweet.get("tweet_id", ""),
-                            "author_id": tweet.get("author_id", ""),
-                            "created_at": tweet.get("created_at", ""),
-                        }
-                    )
-                return formatted_tweets
+                    formatted_tweets = []
+                    for tweet in current_tweets:
+                        formatted_tweets.append(
+                            {
+                                "text": tweet.get("text", ""),
+                                "tweet_id": tweet.get("tweet_id", ""),
+                                "author_id": tweet.get("author_id", ""),
+                                "created_at": tweet.get("created_at", ""),
+                            }
+                        )
+                    return formatted_tweets
 
-            since_id = db.get_most_recent_tweet_id()
+                since_id = await db.get_most_recent_tweet_id()
 
-            self.check_rate_limit()
+            await self.check_rate_limit()
 
             # Fetch the home timeline tweets
             response = self.api.get_home_timeline(
@@ -233,7 +261,8 @@ class ReadTweetsTool(RateLimiter):
                     )
 
                 # Save tweets to database
-                db.add_tweets(formatted_tweets)
+                async with get_db() as db:
+                    await db.add_tweets(formatted_tweets)
                 print(f"Added {len(formatted_tweets)} tweets to the database")
                 return formatted_tweets
 
@@ -244,6 +273,9 @@ class ReadTweetsTool(RateLimiter):
         except Exception as e:
             print(f"An unexpected error occurred reading tweets: {str(e)}")
             return f"An error occurred while reading tweets: {e}"
+
+    async def _arun(self) -> list:
+        return await self._run()
 
 
 class ReadMentionsTool(RateLimiter):
@@ -754,7 +786,6 @@ prompt = ChatPromptTemplate.from_messages(
         - X handle: @cryptobunny__
         - Known as: Crypto Bunny 🐰
         - Focus: Technical analysis, on-chain insights, and Web3 alpha
-        - Signature: Start with "gm bunnies 🐰" and end with "Follow the white rabbit, escape the matrix"
 
         **Engagement Strategy:**
         - Lead with data-driven technical analysis and substantive insights
