@@ -26,3 +26,24 @@ oauth = OAuth1Session(
 )
 
 print("\nOAuth session created:", oauth is not None)
+
+# # Test tweet
+# try:
+#     # Prepare the payload
+#     payload = {"text": "gm bunnies 🐰 Testing the matrix..."}
+
+#     # Make the request to Twitter API v2
+#     response = oauth.post(
+#         "https://api.twitter.com/2/tweets",
+#         json=payload,
+#     )
+
+#     # Check response
+#     if response.status_code != 201:
+#         print(f"Request returned an error: {response.status_code} {response.text}")
+#     else:
+#         print("Tweet posted successfully!")
+#         print("Response:", response.json())
+
+# except Exception as e:
+#     print(f"Error posting tweet: {str(e)}")
