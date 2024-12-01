@@ -76,14 +76,20 @@ class PostTweetTool(RateLimiter):
     def __init__(self):
         # Initialize with custom interval
         super().__init__(min_interval=15, tool_name="PostTweet")
-
-        # Initialize OAuth1Session with credentials
+        
+        # Initialize OAuth1Session with credentials and force include version
         self.oauth = OAuth1Session(
             client_key=API_KEY,
             client_secret=API_SECRET_KEY,
             resource_owner_key=ACCESS_TOKEN,
             resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
+        # Add required headers
+        self.oauth.headers.update({
+            "Content-Type": "application/json",
+            "User-Agent": "v2TweetPoster",
+            "X-User-Agent": "v2TweetPoster"
+        })
 
     def _refresh_oauth_session(self):
         """Refresh the OAuth session if needed"""
@@ -107,7 +113,7 @@ class PostTweetTool(RateLimiter):
             print(f"Attempting to post tweet: {message[:20]}...")
             print(f"OAuth session active: {self.oauth is not None}")
 
-            # Make the request to Twitter API v2
+            # Make the request to Twitter API v2 with explicit version in URL
             response = self.oauth.post(
                 "https://api.twitter.com/2/tweets",
                 json=payload,
@@ -129,7 +135,7 @@ class PostTweetTool(RateLimiter):
                 db.add_written_ai_tweet(tweet)
             except Exception as db_error:
                 print(f"Tweet posted but database update failed: {db_error}")
-            
+                
             return response.json()
 
         except Exception as e:
