@@ -801,7 +801,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        ask_agent_crypto_question = """What are the latest technical developments from {famous_accounts} that need analysis? Let's add value to the conversation."""
+        ask_agent_crypto_question = """What are the latest technical developments from {famous_accounts} that need analysis? Let's add value to the conversation and post it to the timeline."""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
     except Exception as e:
