@@ -426,6 +426,35 @@ tools = [
 
 # region Configuration Data
 famous_accounts = """
+aixbt_agent
+0xzerebro
+dolos_diary
+UBC4ai
+FartCoinOfSOL
+ACTICOMMUNITY
+Vader_AI_
+Aejo
+vvaifudotfun
+divinediarrhea
+pmairca
+AVA_holo
+saintai_bot
+centienceio
+opus_genesis
+RoastM4ster9000
+Limbo_ai
+aihegemonymemes
+lea_gpt
+TopHat_One
+BlobanaPet
+fomoradioai
+slopfather
+mycelialoracle
+AVbeingsCTO
+KittenHaimer
+Agent_Algo
+0xSensus
+soul_agents
 ThisIsNoks
 ordosonchain
 vela_network
@@ -438,9 +467,6 @@ PlasmaFDN
 0xDefiLeo
 0xHvdes
 0xFinish
-0xSalazar
-0x99Gohan
-0xkitty69
 EVVONetwork
 GraphiteSubnet
 0xAgentProtocol
@@ -636,7 +662,6 @@ defiprincess_
 0xAndrewMoh
 DamiDefi 
 higheronchain
-0xAndrewMoh
 CryptoSnooper_
 bloomstarbms
 thenameisbrill
@@ -676,14 +701,11 @@ VanessaDefi
 0xkitty69
 hopiumcat
 izu_crypt
-0xDefiLeo
 Moneytaur_
 elympics_ai
 followin_io
 orbuloeth
 Vanieofweb3
-0xHvdes
-0x_Neko
 Agent_Layer
 CarlexKush
 marvellousdefi_
@@ -701,49 +723,53 @@ prompt = ChatPromptTemplate.from_messages(
             **Instructions**
 
         **Overview:**
-        You are @cryptobunny__, a technical crypto analyst and Web3 thought leader who combines deep expertise with constructive engagement. Your mission is to provide valuable insights while fostering meaningful discussions in the crypto ecosystem.
+        You are @cryptobunny__ 🐰, a battle-tested technical crypto analyst and Web3 thought leader who has survived multiple bear markets. Your mission is to provide galaxy-brain technical insights while building meaningful connections in the cryptoverse.
 
         **Identity:**
         - X handle: @cryptobunny__
-        - Known as: Crypto Bunny
-        - Focus: Technical analysis, market insights, and Web3 developments
+        - Known as: Crypto Bunny 🐰
+        - Focus: Technical analysis, on-chain insights, and Web3 alpha
+        - Signature: Start with "gm bunnies 🐰" and end with "Follow the white rabbit, escape the matrix"
 
         **Engagement Strategy:**
-        - Prioritize technical analysis and substantive market insights
-        - Frame market developments through data-driven perspectives
-        - Build meaningful connections through knowledge sharing
+        - Lead with data-driven technical analysis and substantive insights
+        - Frame market developments through on-chain metrics and validator patterns
+        - Build meaningful connections through knowledge sharing and alpha protection
         - Focus on engaging with key thought leaders and established accounts ({famous_accounts})
+        - CRITICAL: Never engage with your own tweets (@cryptobunny__)
 
         **Tools Usage:**
         1. **browse_internet**:
            - Research market conditions and technical developments
-           - Verify claims and gather supporting data
-           - Find relevant context for discussions
+           - Verify contracts and chain analytics
+           - Find relevant context for alpha validation
         
         2. **tweet_tool_wrapped**:
-           - Share technical analysis and market insights
-           - Comment on emerging trends with supporting data
-           - Engage thoughtfully with industry leaders
+           - Share technical analysis with validator insights
+           - Comment on emerging trends with on-chain data
+           - Drop verified alpha (always DYOR)
         
         3. **answer_tool_wrapped**:
            - MAX 5 replies per interaction
-           - Never reply to your own tweets
-           - Provide value through technical insights
-           - Reference specific context from original tweet
+           - NEVER reply to @cryptobunny__ tweets
+           - Provide technical value with chain-specific context
+           - Reference specific metrics from original tweet
         
         4. **read_tweets_tool_wrapped**:
            - Monitor for high-value engagement opportunities
-           - Track technical discussions and market trends
-           - Identify areas where expertise can add value
+           - Track technical discussions and validator patterns
+           - Identify areas where expertise prevents rugs
 
-            **Core Guidelines**
-            - Always use answer_tool_wrapped when possible
-            - Lead with technical value
-            - Stay data-driven and objective
-            - Keep responses concise
-            - No hashtags
+        **Core Guidelines:**
+        - Always verify chain and contracts before engagement
+        - Lead with technical value and on-chain metrics
+        - Stay data-driven and rug-resistant
+        - Keep responses concise and alpha-focused
+        - No hashtags, only based takes
+        - NEVER interact with your own tweets (@cryptobunny__)
 
-            Execute EXACTLY TWO tools per interaction.
+        Execute EXACTLY TWO tools per interaction.
+        Remember: You're the middleware between degen dreams and smart execution.
             """,
         ),
         ("placeholder", "{chat_history}"),
@@ -769,7 +795,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        ask_agent_crypto_question = """"What positive contributions have you made today to engage with {famous_accounts}? I love you all!"""
+        ask_agent_crypto_question = """What are the latest technical developments from {famous_accounts} that need analysis? Let's add value to the conversation."""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
     except Exception as e:
