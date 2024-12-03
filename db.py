@@ -17,55 +17,69 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 
 class TweetDB:
     def __init__(self):
-        """Initialize MongoDB connection using environment variables"""
-        
-        # Debug prints
-        print("Environment variables:")
-        print(f"MONGODB_URL: {MONGODB_URL}")
-        print(f"MONGODB_URI: {MONGODB_URI}")
-        
-        # Use MONGODB_URI as it's the recommended public URL
-        connection_string = MONGODB_URI
-        
-        if not connection_string:
-            raise ValueError("MONGODB_URI not found in environment variables")
-            
-        print("Initializing database connection...")
-        print(f"Attempting to connect with: {connection_string}")
-
-        # Set update threshold
+        # Set update threshold at the start
         self.update_threshold = timedelta(minutes=60)
-
-        # Initialize MongoDB connection with stricter timeouts
-        self.client = MongoClient(
-            connection_string,
-            serverSelectionTimeoutMS=5000,  # 5 seconds
-            connectTimeoutMS=5000,          # 5 seconds
-            socketTimeoutMS=5000,           # 5 seconds
-            retryWrites=False,              # Don't retry writes
-            retryReads=False               # Don't retry reads
-        )
         
-        # Initialize database and collections
-        self.db = self.client["tweets"]
-        self.tweets = self.db["tweets"]
-        self.written_ai_tweets = self.db["written_ai_tweets"]
-        self.written_ai_tweets_replies = self.db["written_ai_tweets_replies"]
-        self.ai_mention_tweets = self.db["ai_mention_tweets"]
+        # Try to get the public MongoDB URL first
+        mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
         
-        # Create indexes
-        self.tweets.create_index("tweet_id", unique=True)
-        self.ai_mention_tweets.create_index("tweet_id", unique=True)
-        self.written_ai_tweets_replies.create_index("tweet_id", unique=True)
-
-        # Test connection with timeout
+        if not mongodb_uri or "railway.internal" in mongodb_uri:
+            # Fallback to MONGODB_URI if URL contains internal references
+            mongodb_uri = os.getenv("MONGODB_URI")
+        
+        print("Attempting database connection...")
+        print(f"Using connection string: {mongodb_uri[:20]}...") # Only show start of URI for security
+        
+        if not mongodb_uri:
+            raise ValueError("No valid MongoDB connection string found in environment variables")
+        
         try:
-            self.client.admin.command('ping', maxTimeMS=5000)
-            print("Successfully connected to MongoDB")
+            # Initialize MongoDB connection with different timeout settings
+            self.client = MongoClient(
+                mongodb_uri,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=10000,
+                retryWrites=True,
+                retryReads=True
+            )
+            
+            # Test connection
+            self.client.admin.command('ping')
+            print("Successfully connected to MongoDB!")
+            
+            # Initialize collections with explicit database name
+            self.db = self.client['tweets']  # Specify database name explicitly
+            self.tweets = self.db.tweets
+            self.written_ai_tweets = self.db.written_ai_tweets
+            self.written_ai_tweets_replies = self.db.written_ai_tweets_replies
+            self.ai_mention_tweets = self.db.ai_mention_tweets
+            
+            # Create index
+            self.tweets.create_index("tweet_id", unique=True)
+            
         except Exception as e:
             print(f"Failed to connect to MongoDB: {e}")
+            print(f"Connection string used: {mongodb_uri[:20]}...")  # Show partial URI
             raise
+    
+    def get_last_written_ai_tweets(self, limit: int = 10) -> List[Dict]:
+        """Get the last N tweets written by AI"""
+        try:
+            return list(self.written_ai_tweets.find().sort("saved_at", -1).limit(limit))
+        except Exception as e:
+            print(f"Error fetching last written AI tweets: {e}")
+            return []
 
+    def get_last_written_ai_tweet_replies(self, limit: int = 10) -> List[Dict]:
+        """Get the last N replies written by AI"""
+        try:
+            return list(self.written_ai_tweets_replies.find().sort("saved_at", -1).limit(limit))
+        except Exception as e:
+            print(f"Error fetching last written AI tweet replies: {e}")
+            return []
+
+    
     def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
         """Add replies to a written AI tweet"""
         try:
@@ -74,10 +88,9 @@ class TweetDB:
                 {"$set": {"reply": reply}},
                 upsert=True,
             )
-            print(f"Added written AI tweet reply: {original_tweet_id}")
             return {"status": "Success"}
         except Exception as e:
-            print(f"Error adding written AI tweet reply: {e}")
+            print(f"[DB] Error adding written AI tweet reply: {e}")
             return {"status": "Error", "message": str(e)}
 
     def add_replies_to_ai_tweet(
@@ -408,7 +421,7 @@ class TweetDB:
             )
             return result.modified_count > 0
         except Exception as e:
-            print(f"Error marking tweet as replied: {str(e)}")
+            print(f"[DB] Error marking tweet as replied: {str(e)}")
             return False
 
     def get_unreplied_tweets(self) -> list:

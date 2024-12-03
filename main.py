@@ -13,6 +13,8 @@ from time import time, sleep
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
+from variables import USER_ID
+
 
 # Load environment variables
 load_dotenv()
@@ -49,108 +51,114 @@ llm = ChatOpenAI(
 # region Twitter Service Classes
 class RateLimiter:
     def __init__(self, min_interval: int = 30, tool_name: str = ""):
+        if min_interval < 0:
+            raise ValueError(f"Invalid min_interval: {min_interval}. Must be >= 0")
+            
         self.last_action_time = 0
-        self.min_interval = min_interval  # configurable interval
+        self.min_interval = min_interval
         self.tool_name = tool_name or self.__class__.__name__
+        print(f"[{self.tool_name}] Rate limiter initialized with {min_interval}s interval")
 
     def check_rate_limit(self) -> None:
         """Check and enforce rate limiting with improved logging"""
-        current_time = time()
-        time_since_last_action = current_time - self.last_action_time
+        try:
+            current_time = time()
+            time_since_last_action = current_time - self.last_action_time
 
-        if time_since_last_action < self.min_interval:
-            wait_time = self.min_interval - time_since_last_action
-            print(f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds...")
-            try:
-                sleep(wait_time)
-            except KeyboardInterrupt:
-                print(f"\n[{self.tool_name}] Rate limit wait interrupted")
-                raise
+            if time_since_last_action < self.min_interval:
+                wait_time = self.min_interval - time_since_last_action
+                print(f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds...")
+                try:
+                    sleep(wait_time)
+                except KeyboardInterrupt:
+                    print(f"\n[{self.tool_name}] Rate limit wait interrupted")
+                    raise
+                except ValueError as ve:
+                    print(f"[{self.tool_name}] Invalid wait time: {ve}")
+                    raise
 
-        self.last_action_time = current_time
+            self.last_action_time = current_time
+            
+        except Exception as e:
+            print(f"[{self.tool_name}] Rate limit check failed: {str(e)}")
+            raise
 
 
 class PostTweetTool(RateLimiter):
     name: str = "Post tweet"
-    description: str = "Post a tweet with the given message"
+    description: str = "Use this tool to post a new tweet to the timeline. This is the DEFAULT tool for posting tweets. DO NOT use 'Answer tweet' tool unless you are specifically replying to someone else's tweet."
 
     def __init__(self):
-        # Initialize with custom interval
-        super().__init__(min_interval=15, tool_name="PostTweet")
-        
-        # Initialize OAuth1Session with credentials and force include version
+        super().__init__(min_interval=0, tool_name="PostTweet")
         self.oauth = OAuth1Session(
             client_key=API_KEY,
             client_secret=API_SECRET_KEY,
             resource_owner_key=ACCESS_TOKEN,
             resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
-        # Add required headers
         self.oauth.headers.update({
             "Content-Type": "application/json",
             "User-Agent": "v2TweetPoster",
             "X-User-Agent": "v2TweetPoster"
         })
+
+    def _initialize_oauth(self) -> OAuth1Session:
+        """Create a fresh OAuth session with required headers"""
+        try:
+            oauth = OAuth1Session(
+                client_key=API_KEY,
+                client_secret=API_SECRET_KEY,
+                resource_owner_key=ACCESS_TOKEN,
+                resource_owner_secret=ACCESS_TOKEN_SECRET,
+            )
+            oauth.headers.update({
+                "Content-Type": "application/json",
+                "User-Agent": "v2TweetPoster",
+                "X-User-Agent": "v2TweetPoster"
+            })
+            return oauth
+        except Exception as e:
+            print(f"[PostTweet] Failed to initialize OAuth session: {str(e)}")
+            raise
 
     def _refresh_oauth_session(self):
         """Refresh the OAuth session if needed"""
-        self.oauth = OAuth1Session(
-            client_key=API_KEY,
-            client_secret=API_SECRET_KEY,
-            resource_owner_key=ACCESS_TOKEN,
-            resource_owner_secret=ACCESS_TOKEN_SECRET,
-        )
-        self.oauth.headers.update({
-            "Content-Type": "application/json",
-            "User-Agent": "v2TweetPoster",
-            "X-User-Agent": "v2TweetPoster"
-        })
+        try:
+            self.oauth = self._initialize_oauth()
+        except Exception as e:
+            print(f"[PostTweet] Failed to refresh OAuth session: {str(e)}")
+            raise
 
-    def _run(self, message: str):
+    def _run(self, message: str) -> dict:
         try:
             self.check_rate_limit()
-            # Refresh session before posting
             self._refresh_oauth_session()
             
-            # Prepare the payload
-            payload = {"text": message}
-
-            # Add error logging to debug issues
             print(f"Attempting to post tweet: {message[:20]}...")
-            print(f"OAuth session active: {self.oauth is not None}")
-
-            # Make the request to Twitter API v2
+            
             response = self.oauth.post(
                 "https://api.twitter.com/2/tweets",
-                json=payload,
+                json={"text": message}
             )
 
-            # Add response status logging
-            print(f"Response status: {response.status_code}")
             if response.status_code != 201:
+                error_msg = f"Request failed: {response.status_code} {response.text}"
                 print(f"Full error response: {response.text}")
-                raise Exception(f"Request returned an error: {response.status_code} {response.text}")
+                return {"error": error_msg}
 
-            print("Tweet posted successfully!")
-            
             response_data = response.json()
-            print("tweet data", response_data["data"])
+            print(f"Posted tweet: {response_data['data']['text']}")
             
-            # Add tweet to database
-            # tweet structure: {"data": {"id": "1234567890", "text": "Hello, world!"}}
-            try:
-                db.add_written_ai_tweet(response_data["data"])
-            except Exception as db_error:
-                print(f"Tweet posted but database update failed: {db_error}")
-                
+            db.add_written_ai_tweet(response_data["data"])
             return response_data
 
         except Exception as e:
-            print(f"Error posting tweet: {str(e)}")
-            return None
+            error_msg = str(e)
+            print(f"Error posting tweet: {error_msg}")
+            return {"error": error_msg}
 
-    def _arun(self, message: str):
-        return self._run(message)  # Use sync version
+    def _arun(self, message: str) -> dict:
+        return self._run(message)
 
 
 class AnswerTweetInput(BaseModel):
@@ -160,116 +168,198 @@ class AnswerTweetInput(BaseModel):
 
 class AnswerTweetTool(RateLimiter):
     name: str = "Answer tweet"
-    description: str = "Use this tool when you need to reply to a tweet"
+    description: str = "ONLY use this tool when REPLYING to an EXISTING tweet from ANOTHER user. DO NOT use this for posting new tweets to the timeline - use 'Post tweet' tool for that instead. This tool requires a specific tweet_id to reply to."
     args_schema: Type[BaseModel] = AnswerTweetInput
 
     def __init__(self):
-        # Initialize with custom interval
-        super().__init__(min_interval=30, tool_name="AnswerTweet")
-        self.api = tweepy.Client(
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=True,
+        super().__init__(min_interval=0, tool_name="AnswerTweet")
+        self.oauth = OAuth1Session(
+            client_key=API_KEY,
+            client_secret=API_SECRET_KEY,
+            resource_owner_key=ACCESS_TOKEN,
+            resource_owner_secret=ACCESS_TOKEN_SECRET,
         )
+        self.oauth.headers.update({
+            "Content-Type": "application/json",
+            "User-Agent": "v2TweetPoster",
+            "X-User-Agent": "v2TweetPoster"
+        })
+
+    def _initialize_oauth(self) -> OAuth1Session:
+        """Create a fresh OAuth session with required headers"""
+        try:
+            oauth = OAuth1Session(
+                client_key=API_KEY,
+                client_secret=API_SECRET_KEY,
+                resource_owner_key=ACCESS_TOKEN,
+                resource_owner_secret=ACCESS_TOKEN_SECRET,
+            )
+            oauth.headers.update({
+                "Content-Type": "application/json",
+                "User-Agent": "v2TweetPoster",
+                "X-User-Agent": "v2TweetPoster"
+            })
+            return oauth
+        except Exception as e:
+            print(f"[AnswerTweet] Failed to initialize OAuth session: {str(e)}")
+            raise
+
+    def _refresh_oauth_session(self):
+        """Refresh the OAuth session if needed"""
+        try:
+            self.oauth = self._initialize_oauth()
+        except Exception as e:
+            print(f"[AnswerTweet] Failed to refresh OAuth session: {str(e)}")
+            raise
+
+    def _get_tweet_details(self, tweet_id: str) -> dict:
+        """Get tweet details including author username"""
+        try:
+            response = self.oauth.get(
+                f"https://api.twitter.com/2/tweets/{tweet_id}",
+                params={
+                    "tweet.fields": "author_id",
+                    "expansions": "author_id",
+                    "user.fields": "username"
+                }
+            )
+            
+            if response.status_code == 429:  # Rate limit or usage cap
+                error_data = response.json()
+                if "usage-capped" in error_data.get("type", ""):
+                    print(f"Monthly READ cap exceeded, proceeding without username. Error: {error_data.get('detail')}")
+                    return {"default_reply": True}
+                else:
+                    print(f"Rate limit exceeded. Details: {error_data}")
+                    return {"error": "rate_limit"}
+                
+            if response.status_code != 200:
+                print(f"Error getting tweet details: {response.text}")
+                raise Exception(f"Failed to get tweet details: {response.status_code}")
+                
+            return response.json()
+        except Exception as e:
+            print(f"Error fetching tweet details: {str(e)}")
+            raise
 
     def _run(self, tweet_id: str, message: str) -> str:
         try:
             self.check_rate_limit()
-
+            
             # Validate tweet_id
             if not tweet_id or not isinstance(tweet_id, str):
                 return f"Invalid tweet ID format: {tweet_id}"
 
             # Check if this is the AI's own tweet
             if db.is_ai_tweet(tweet_id):
-                return f"Cannot reply to own tweet (ID: {tweet_id}), please choose another tweet"
+                return f"Cannot reply to own tweet (ID: {tweet_id})"
+            
+            self._refresh_oauth_session()
+            
+            # Get tweet details (for validation only)
+            self._get_tweet_details(tweet_id)
+            
+            # Prepare simple payload
+            payload = {
+                "text": message,
+                "reply": {"in_reply_to_tweet_id": tweet_id}
+            }
+            
+            # Post the reply
+            response = self.oauth.post(
+                "https://api.twitter.com/2/tweets",
+                json=payload,
+            )
 
-            # Post a reply to the tweet
-            response = self.api.create_tweet(text=message, in_reply_to_tweet_id=tweet_id)
+            if response.status_code != 201:
+                error_msg = f"Error response: {response.text}"
+                print(error_msg)
+                return error_msg
+
+            response_data = response.json()
+            success_msg = f"Reply posted successfully! Tweet ID: {response_data['data']['id']}"
+            print(success_msg)
             
-            # Add to database
+            # Store in database
             db.add_written_ai_tweet_reply(tweet_id, message)
-            db.add_replied_tweet(tweet_id)
+            if db.add_replied_tweet(tweet_id):
+                print(f"Successfully stored and marked reply for tweet {tweet_id}")
             
-            return "Reply tweet posted successfully!"
-        except tweepy.TweepyException as e:
-            return f"Tweepy error occurred: {str(e)}"
+            return success_msg
+
         except Exception as e:
-            return f"An error occurred answering tweet: {e}"
+            error_msg = f"Error posting reply: {str(e)}"
+            print(error_msg)
+            return error_msg
 
     def _arun(self, tweet_id: str, message: str) -> str:
-        return self._run(tweet_id, message)  # Use sync version
+        return self._run(tweet_id, message)
 
 
 class ReadTweetsTool(RateLimiter):
     def __init__(self):
         # Initialize with custom interval
-        super().__init__(min_interval=60, tool_name="ReadTweets")
+        super().__init__(min_interval=0, tool_name="ReadTweets")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=True,
+            wait_on_rate_limit=False
         )
 
-    def _run(self) -> list:  # Keep sync
+    def _run(self) -> list:
         try:
-            # First, check if the database needs an update
-            with get_db() as db:  # Use sync context
+            with get_db() as db:  # Single database context for the entire operation
+                # First, check if the database needs an update
                 needs_update, current_tweets = db.check_database_status()
                 if not needs_update:
                     print("Database is up to date, returning current tweets")
-
                     formatted_tweets = []
                     for tweet in current_tweets:
-                        formatted_tweets.append(
-                            {
-                                "text": tweet.get("text", ""),
-                                "tweet_id": tweet.get("tweet_id", ""),
-                                "author_id": tweet.get("author_id", ""),
-                                "created_at": tweet.get("created_at", ""),
-                            }
-                        )
+                        formatted_tweets.append({
+                            "text": tweet.get("text", ""),
+                            "tweet_id": tweet.get("tweet_id", ""),
+                            "author_id": tweet.get("author_id", ""),
+                            "created_at": tweet.get("created_at", ""),
+                        })
                     return formatted_tweets
-
+                
+                # Get most recent tweet ID while connection is still open
                 since_id = db.get_most_recent_tweet_id()
-
-            self.check_rate_limit()
-
-            # Fetch the home timeline tweets
-            response = self.api.get_home_timeline(
-                tweet_fields=["text", "created_at", "author_id"],
-                max_results=100,
-                since_id=since_id,
-            )
-            if hasattr(response, "data"):
-                formatted_tweets = []
-                for tweet in response.data:
-                    formatted_tweets.append(
-                        {
-                            "tweet_id": str(tweet.id),
-                            "text": tweet.text,
-                            "created_at": tweet.created_at,
-                            "author_id": tweet.author_id,
-                        }
+                
+                try:
+                    # Fetch new tweets from Twitter
+                    response = self.api.get_home_timeline(
+                        tweet_fields=["text", "created_at", "author_id"],
+                        max_results=10,
+                        since_id=since_id
                     )
+                    
+                    if hasattr(response, "data"):
+                        formatted_tweets = []
+                        for tweet in response.data:
+                            formatted_tweets.append({
+                                "tweet_id": str(tweet.id),
+                                "text": tweet.text,
+                                "created_at": tweet.created_at,
+                                "author_id": tweet.author_id,
+                            })
 
-                # Save tweets to database
-                with get_db() as db:
-                    db.add_tweets(formatted_tweets)
-                print(f"Added {len(formatted_tweets)} tweets to the database")
-                return formatted_tweets
-
-            return []
-        except tweepy.TweepyException as e:
-            print(f"Tweepy error occurred reading tweets: {str(e)}")
-            return f"An error occurred while reading tweets: {e}"
+                        # Save tweets to database while still in the context
+                        db.add_tweets(formatted_tweets)
+                        print(f"Added {len(formatted_tweets)} tweets to the database")
+                        return formatted_tweets
+                    
+                    return []
+                    
+                except tweepy.TooManyRequests:
+                    print("Rate limit hit, using cached tweets")
+                    return current_tweets if current_tweets else []
+                
         except Exception as e:
             print(f"An unexpected error occurred reading tweets: {str(e)}")
-            return f"An error occurred while reading tweets: {e}"
+            return []  # Changed from string to empty list for consistency
 
     def _arun(self) -> list:
         return self._run()  # Use sync version
@@ -277,8 +367,8 @@ class ReadTweetsTool(RateLimiter):
 
 class ReadMentionsTool(RateLimiter):
     def __init__(self):
-        super().__init__()
-
+        # Initialize with custom interval (match ReadTweetsTool style)
+        super().__init__(min_interval=0, tool_name="ReadMentions")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -290,67 +380,81 @@ class ReadMentionsTool(RateLimiter):
 
     def _run(self) -> list:
         try:
-            id = "1856324423672049668"
-            response = self.api.get_users_mentions(
-                id=id,
-                tweet_fields=["text", "created_at", "author_id", "conversation_id"],
-                expansions=["referenced_tweets.id", "in_reply_to_user_id", "author_id"],
-                user_fields=["username", "name"],  # Add user fields
-                max_results=10,
-            )
-            print("mentions", response.data)
-            if hasattr(response, "data"):
-                formatted_mentions = []
-                # Create a user lookup dictionary
-                users = (
-                    {user.id: user for user in response.includes.get("users", [])}
-                    if hasattr(response, "includes")
-                    else {}
-                )
+            with get_db() as db:  # Add database context manager like ReadTweetsTool
+                try:
+                    # Fetch mentions from Twitter
+                    response = self.api.get_users_mentions(
+                        id=USER_ID,
+                        tweet_fields=["text", "created_at", "author_id", "conversation_id"],
+                        expansions=["referenced_tweets.id", "in_reply_to_user_id", "author_id"],
+                        user_fields=["username", "name"],
+                        max_results=10,
+                    )
+                    
+                    if hasattr(response, "data"):
+                        formatted_mentions = []
+                        # Create a user lookup dictionary
+                        users = (
+                            {user.id: user for user in response.includes.get("users", [])}
+                            if hasattr(response, "includes")
+                            else {}
+                        )
 
-            for tweet in response.data:
-                # Get user info
-                author = users.get(tweet.author_id)
-                author_username = author.username if author else "unknown"
-                author_name = author.name if author else "Unknown User"
+                        for tweet in response.data:
+                            # Get user info
+                            author = users.get(tweet.author_id)
+                            author_username = author.username if author else "unknown"
+                            author_name = author.name if author else "Unknown User"
 
-                formatted_mentions.append(
-                    {
-                        "tweet_id": str(tweet.id),
-                        "text": tweet.text,
-                        "created_at": tweet.created_at,
-                        "author_id": tweet.author_id,
-                        "author_username": author_username,
-                        "author_name": author_name,
-                        "conversation_id": tweet.conversation_id,
-                    }
-                )
-            print(formatted_mentions)
-            db.add_ai_mention_tweets(formatted_mentions)
-            return formatted_mentions
+                            formatted_mentions.append({
+                                "tweet_id": str(tweet.id),
+                                "text": tweet.text,
+                                "created_at": tweet.created_at,
+                                "author_id": tweet.author_id,
+                                "author_username": author_username,
+                                "author_name": author_name,
+                                "conversation_id": tweet.conversation_id,
+                            })
+
+                        # Save mentions to database while still in the context
+                        db.add_ai_mention_tweets(formatted_mentions)
+                        print(f"Added {len(formatted_mentions)} mentions to the database")
+                        return formatted_mentions
+                    
+                    return []
+                    
+                except tweepy.TooManyRequests:
+                    print("Rate limit hit for mentions")
+                    return []
+                
         except Exception as e:
-            print(f"Error reading mentions: {str(e)}")
-            return []
+            print(f"An unexpected error occurred reading mentions: {str(e)}")
+            return []  # Match ReadTweetsTool's error handling style
 
-
-# endregion
+    def _arun(self) -> list:
+        return self._run()  # Use sync version
 
 # region Tool Initialization
-tweet_tool = PostTweetTool()
-answer_tool = AnswerTweetTool()
-read_tweets_tool = ReadTweetsTool()
-browse_internet = TavilySearchResults(
-    max_results=1,
-    search_params={
-        "include_domains": [
-            "twitter.com",
-            "x.com",
-            "coindesk.com",
-            "cointelegraph.com",
-        ],
-        "recency_days": 7,  # Only get results from the last week
-    },
-)
+try:
+    tweet_tool = PostTweetTool()
+    answer_tool = AnswerTweetTool()
+    read_tweets_tool = ReadTweetsTool()
+    browse_internet = TavilySearchResults(
+        max_results=1,
+        search_params={
+            "include_domains": [
+                "twitter.com",
+                "x.com",
+                "coindesk.com",
+                "cointelegraph.com",
+            ],
+            "recency_days": 7,  # Only get results from the last week
+        },
+    )
+    print("All tools initialized successfully")
+except Exception as e:
+    print(f"Error initializing tools: {str(e)}")
+    raise  # Re-raise the exception since we can't continue without tools
 # mentions_tool = ReadMentionsTool()
 # endregion
 
@@ -359,8 +463,20 @@ browse_internet = TavilySearchResults(
 def post_tweet_tool(message: str) -> str:
     """Post a tweet with the message you decide is the most proper."""
     try:
+
         # Use synchronous version
-        result = tweet_tool._run(message)  # Use _run instead of post_tweet
+        result = tweet_tool._run(message)
+        
+        # Check if the tweet was posted successfully
+        if result is None:
+            return f"Failed to post tweet: No response from Twitter API"
+            
+        # Check if the tweet was stored in the database
+        if "data" in result:
+            db_result = db.add_written_ai_tweet(result["data"])
+            if db_result.get("status") != "Success":
+                print(f"Failed to store tweet in database: {db_result.get('message')}")
+        
         return f"Posted tweet: {message}"
     except Exception as e:
         return f"An error occurred posting tweet: {str(e)}"
@@ -369,6 +485,7 @@ def post_tweet_tool(message: str) -> str:
 def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
     """Reply to a specific tweet identified by tweet_id with the message."""
     try:
+
         # Validate tweet_id
         if not tweet_id or not isinstance(tweet_id, str):
             return f"Invalid tweet ID format: {tweet_id}"
@@ -379,41 +496,52 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         
         sleep(13)  # Rate limiting
         
-        # Send the reply using synchronous version
-        result = answer_tool._run(tweet_id=tweet_id, message=message)
-        db.add_written_ai_tweet_reply(tweet_id, message)
-
-        # Mark the tweet as replied in the database
-        if db.add_replied_tweet(tweet_id):
-            print(f"Marked tweet {tweet_id} as replied in database")
-        else:
+        # Mark as replied
+        if not db.add_replied_tweet(tweet_id):
             print(f"Failed to mark tweet {tweet_id} as replied in database")
 
-        return f"Replied to tweet {tweet_id} with: {message}"
     except Exception as e:
         return f"An error occurred replying to tweet: {str(e)}"
 
 
 def read_timeline_tool() -> str:
+    """Read and format tweets from the timeline with improved error handling."""
     try:
         tweets = read_tweets_tool._run()
 
-        # Handle formatted tweets first
-        if isinstance(tweets, list) and tweets and isinstance(tweets[0], dict):
-            formatted_tweets = [
-                f"Tweet ID: {tweet['tweet_id']}\nContent: {tweet['text']}"
-                for tweet in tweets
-            ]
-            return "\n---\n".join(formatted_tweets)
+        # Handle API errors or empty responses
+        if tweets is None:
+            return "Failed to fetch tweets: No response from Twitter API"
 
-        # Handle other cases
-        if isinstance(tweets, str):  # If it's an error message
-            return tweets
-        if not tweets:
-            return "No tweets available to generate a response."
+        # Handle formatted tweets
+        if isinstance(tweets, list):
+            if not tweets:
+                return "No new tweets available in the timeline."
+            
+            if isinstance(tweets[0], dict):
+                try:
+                    formatted_tweets = [
+                        f"Tweet ID: {tweet.get('tweet_id', 'Unknown')}\n"
+                        f"Content: {tweet.get('text', 'No content')}"
+                        for tweet in tweets
+                    ]
+                    return "\n---\n".join(formatted_tweets)
+                except KeyError as ke:
+                    print(f"Error formatting tweets: Missing key {ke}")
+                    return "Error formatting tweets: Invalid tweet structure"
+            else:
+                print(f"Unexpected tweet format: {type(tweets[0])}")
+                return "Error: Unexpected tweet data structure"
 
-        return "\n".join(tweets)  # Fallback for any other case
+        # Handle error messages from the tool
+        if isinstance(tweets, str):
+            return f"Twitter API message: {tweets}"
+
+        print(f"Unexpected response type: {type(tweets)}")
+        return "Error: Unexpected response format from Twitter"
+
     except Exception as e:
+        print(f"Timeline reading error details: {str(e)}")
         return f"An error occurred reading timeline: {str(e)}"
 
 
@@ -852,11 +980,36 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 # region Service Execution
 def run_crypto_agent(question: str):
     print("Hello bunnies!")  # Add greeting message
+    
+    # Get recent content first
+    last_tweets = db.get_last_written_ai_tweets(10)
+    last_replies = db.get_last_written_ai_tweet_replies(10)
+    combined_entries = last_tweets + last_replies
+    
+    # Create reflection-aware question with Crypto Bunny's personality
+    reflection_question = (
+        f"First, analyze our recent tweets and replies:{combined_entries} "
+        "DEGEN RULES: "
+        "- Keep it ultra short (max 2-3 key points) "
+        "- No fluff, just pure alpha "
+        "- Drop technical facts, skip the hype "
+        "- Be unique and based "
+        "BUNNY WISDOM: "
+        "1. Verify chain or get rekt "
+        "2. Drop sacred contract addresses "
+        "3. Maximize gainz potential "
+        "4. Protect frens from rugs "
+        "5. Vibe check every setup "
+        f"Based on this galaxy brain wisdom, {question}"
+    )
+    
+    # Execute agent with reflection context
     agent_executor = AgentExecutor(
         agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
     )
-    response = agent_executor.invoke({"input": question})
-    print("Follow the white rabbit, escape the matrix.")  # Add encouragement message
+    response = agent_executor.invoke({"input": reflection_question})
+    
+    print("Follow the white rabbit, escape the matrix.")
     return response
 
 
@@ -865,6 +1018,10 @@ if __name__ == "__main__":
         ask_agent_crypto_question = """What are the latest technical developments from {famous_accounts} that need analysis? Let's add value to the conversation and post it to the timeline. Prioritize the most relevant and impactful developments and replies to tweets of other accounts, especially {famous_accounts}."""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
+    except tweepy.Forbidden as fe:
+        print(f"Twitter Permission Error: {fe}")
+    except tweepy.TooManyRequests as te:
+        print(f"Rate Limit Error: {te}")
     except Exception as e:
         print(f"Error running agent: {e}")
     finally:
