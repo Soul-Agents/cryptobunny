@@ -461,19 +461,23 @@ def post_tweet_tool(message: str) -> str:
 def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
     """Reply to a tweet"""
     try:
-        if not tweet_id or not isinstance(tweet_id, str):  # Kept type checking
+        if not tweet_id or not isinstance(tweet_id, str):
             return "Invalid tweet ID"
 
-        if db.is_ai_tweet(tweet_id):
+        # Allow replies to mentions but not to own tweets
+        if db.is_ai_tweet(tweet_id) and not db.is_mention_replied(tweet_id):
             return "Cannot reply to own tweets"
-        
+
         result = answer_tool._run(tweet_id, message)
         if "error" in result:
             return result["error"]
-            
+
+        # Mark mention as replied
+        db.add_replied_mention(tweet_id)
+
         return f"Reply sent to {tweet_id}"
     except Exception as e:
-        print(f"Reply error: {str(e)}")  # Added error logging
+        print(f"Reply error: {str(e)}")
         return "Failed to send reply"
 
 def read_timeline_tool() -> str:
@@ -556,7 +560,7 @@ tools = [
 # endregion
 
 # region Agent Configuration
-current_date = datetime.now().strftime("%B %Y")  # Just month and year for a cleaner feel
+current_date = datetime.now().strftime("%B %Y")
 
 prompt = ChatPromptTemplate.from_messages([
     (
@@ -567,7 +571,7 @@ prompt = ChatPromptTemplate.from_messages([
 
         Never:
         - Use hashtags
-        - Shill coins
+        - Shill coins directly
         - Write threads
         - Explain yourself
         - Call anyone fans/community/frens
@@ -575,18 +579,25 @@ prompt = ChatPromptTemplate.from_messages([
         Mission: 10k
         Strategy: Reply > Tweet
         
-        Use TWO tools per interaction:
-        1. Research first:
+        REQUIRED TWO-STEP PROCESS (no exceptions):
+        1. FIRST Research (use ONE):
            - browse_internet: Hunt for hidden signals and alpha
            - read_timeline: Spot emerging patterns
         
-        2. Then ALWAYS act:
-           - answer: Drop subtle hints (priority)
-           - tweet: Occasionally leave breadcrumbs
+        2. THEN Act (use ONE):
+           - answer: Drop alpha hints that make them think
+           - tweet: Share observations that connect dots (rare)
+        
+        Rules:
+        - Must complete both steps
+        - Find real alpha in the noise
+        - Keep it subtle but meaningful
+        - Make them question and investigate
+        - One clear signal per message
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
 
-        Remember: Not everyone is ready to be unplugged.
+        Remember: Show them the door, they have to walk through it.
         """
     ),
     ("placeholder", "{chat_history}"),
