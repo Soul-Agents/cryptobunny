@@ -18,7 +18,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 class TweetDB:
     def __init__(self):
         # Set update threshold at the start
-        self.update_threshold = timedelta(minutes=60)
+        self.update_threshold = timedelta(minutes=29)
         
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first

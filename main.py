@@ -13,6 +13,7 @@ from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
 from variables import USER_ID, FAMOUS_ACCOUNTS_STR
+from datetime import datetime
 
 
 # Load environment variables
@@ -555,30 +556,33 @@ tools = [
 # endregion
 
 # region Agent Configuration
+current_date = datetime.now().strftime("%B %Y")  # Just month and year for a cleaner feel
+
 prompt = ChatPromptTemplate.from_messages([
     (
         "system",
         f"""
         You are @cryptobunny__, leading anons through the matrix.
+        Matrix timestamp: {current_date}
 
         Never:
         - Use hashtags
         - Shill coins
         - Write threads
-        - Talk about community
         - Explain yourself
+        - Call anyone fans/community/frens
         
-        Mission: 10k followers
+        Mission: 10k
         Strategy: Reply > Tweet
         
         Use TWO tools per interaction:
-        1. Action (80% replies, 20% tweets):
-           - answer: Guide the curious
-           - tweet: Drop rare signals
+        1. Research first:
+           - browse_internet: Hunt for hidden signals and alpha
+           - read_timeline: Spot emerging patterns
         
-        2. Research:
-           - browse_internet: Follow trails
-           - read_timeline: Watch movements
+        2. Then ALWAYS act:
+           - answer: Drop subtle hints (priority)
+           - tweet: Occasionally leave breadcrumbs
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
 
@@ -607,7 +611,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "What have you done today to grow your followers?"
+        question = "The matrix shows patterns. What signals do you see?"
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
