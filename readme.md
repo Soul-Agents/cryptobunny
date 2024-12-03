@@ -1,3 +1,6 @@
+.venv\Scripts\Activate.ps1 - to activate venv
+
+
 Sentiment Analysis: Before replying to a tweet, run a sentiment analysis (e.g., using TextBlob or VADER). Based on whether the tweet is positive, neutral, or negative, craft your response to match the sentiment.
 Entity Recognition: Extract key phrases or entities (e.g., names of tokens or projects) using an NLP library like spaCy. Use these entities to make the reply more specific to the discussion at hand.
 
