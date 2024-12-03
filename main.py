@@ -130,32 +130,51 @@ class PostTweetTool(RateLimiter):
             raise
 
     def _run(self, message: str) -> dict:
-        try:
-            self.check_rate_limit()
-            self._refresh_oauth_session()
-            
-            print(f"Attempting to post tweet: {message[:20]}...")
-            
-            response = self.oauth.post(
-                "https://api.twitter.com/2/tweets",
-                json={"text": message}
-            )
+        retries = 3
+        while retries > 0:
+            try:
+                # Check tweet length (Twitter's limit is 280 characters)
+                if len(message) > 280:
+                    return {"error": f"Tweet exceeds 280 character limit (current: {len(message)})"}
+                
+                self.check_rate_limit()
+                self._refresh_oauth_session()
+                
+                print(f"Attempting to post tweet: {message[:20]}...")
+                
+                response = self.oauth.post(
+                    "https://api.twitter.com/2/tweets",
+                    json={"text": message}
+                )
 
-            if response.status_code != 201:
-                error_msg = f"Request failed: {response.status_code} {response.text}"
-                print(f"Full error response: {response.text}")
+                if response.status_code == 403:
+                    self._refresh_oauth_session()
+                    retries -= 1
+                    if retries > 0:
+                        continue
+                    else:
+                        return {"error": "Failed to post tweet after multiple attempts due to 403 error."}
+
+                if response.status_code != 201:
+                    error_msg = f"Request failed: {response.status_code} {response.text}"
+                    print(f"Full error response: {response.text}")
+                    return {"error": error_msg}
+
+                response_data = response.json()
+                success_msg = f"Posted tweet: {response_data['data']['text']}"
+                print(success_msg)
+                
+                db.add_written_ai_tweet(response_data["data"])
+                return {
+                    "message": success_msg,
+                    "data": response_data["data"],
+                    "type": "tweet"  # To distinguish from replies
+                }
+
+            except Exception as e:
+                error_msg = str(e)
+                print(f"Error posting tweet: {error_msg}")
                 return {"error": error_msg}
-
-            response_data = response.json()
-            print(f"Posted tweet: {response_data['data']['text']}")
-            
-            db.add_written_ai_tweet(response_data["data"])
-            return response_data
-
-        except Exception as e:
-            error_msg = str(e)
-            print(f"Error posting tweet: {error_msg}")
-            return {"error": error_msg}
 
     def _arun(self, message: str) -> dict:
         return self._run(message)
@@ -242,17 +261,17 @@ class AnswerTweetTool(RateLimiter):
             print(f"Error fetching tweet details: {str(e)}")
             raise
 
-    def _run(self, tweet_id: str, message: str) -> str:
+    def _run(self, tweet_id: str, message: str) -> dict:
         try:
             self.check_rate_limit()
             
             # Validate tweet_id
             if not tweet_id or not isinstance(tweet_id, str):
-                return f"Invalid tweet ID format: {tweet_id}"
+                return {"error": f"Invalid tweet ID format: {tweet_id}"}
 
             # Check if this is the AI's own tweet
             if db.is_ai_tweet(tweet_id):
-                return f"Cannot reply to own tweet (ID: {tweet_id})"
+                return {"error": f"Cannot reply to own tweet (ID: {tweet_id}"}
             
             self._refresh_oauth_session()
             
@@ -274,7 +293,7 @@ class AnswerTweetTool(RateLimiter):
             if response.status_code != 201:
                 error_msg = f"Error response: {response.text}"
                 print(error_msg)
-                return error_msg
+                return {"error": error_msg}
 
             response_data = response.json()
             success_msg = f"Reply posted successfully! Tweet ID: {response_data['data']['id']}"
@@ -285,14 +304,18 @@ class AnswerTweetTool(RateLimiter):
             if db.add_replied_tweet(tweet_id):
                 print(f"Successfully stored and marked reply for tweet {tweet_id}")
             
-            return success_msg
+            return {
+                "message": success_msg,
+                "data": response_data["data"],
+                "reply_to": tweet_id
+            }
 
         except Exception as e:
-            error_msg = f"Error posting reply: {str(e)}"
-            print(error_msg)
-            return error_msg
+            error_msg = str(e)
+            print(f"Error posting reply: {error_msg}")
+            return {"error": error_msg}
 
-    def _arun(self, tweet_id: str, message: str) -> str:
+    def _arun(self, tweet_id: str, message: str) -> dict:
         return self._run(tweet_id, message)
 
 
@@ -988,7 +1011,7 @@ def run_crypto_agent(question: str):
     
     # Create reflection-aware question with Crypto Bunny's personality
     reflection_question = (
-        f"First, analyze our recent tweets and replies:{combined_entries} "
+        f"First, analyze our recent tweets and replies:{combined_entries} and DON'T WRITE ANYTHING SIMILAR to this sh*t that you just read. I love you, remember. Be degen, be friendly, be God-like, be love."
         "DEGEN RULES: "
         "- Keep it ultra short (max 2-3 key points) "
         "- No fluff, just pure alpha "
