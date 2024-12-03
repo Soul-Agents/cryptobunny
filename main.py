@@ -321,7 +321,6 @@ class AnswerTweetTool(RateLimiter):
 
 class ReadTweetsTool(RateLimiter):
     def __init__(self):
-        # Initialize with custom interval
         super().__init__(min_interval=0, tool_name="ReadTweets")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
@@ -333,62 +332,67 @@ class ReadTweetsTool(RateLimiter):
 
     def _run(self) -> list:
         try:
-            with get_db() as db:  # Single database context for the entire operation
-                # First, check if the database needs an update
+            with get_db() as db:
+                # 1. Check if we have recent enough tweets
                 needs_update, current_tweets = db.check_database_status()
-                if not needs_update:
-                    print("Database is up to date, returning current tweets")
-                    formatted_tweets = []
-                    for tweet in current_tweets:
-                        formatted_tweets.append({
+                
+                # 2. If tweets are recent enough, use DB data
+                if not needs_update and current_tweets:
+                    print("Using recent tweets from database")
+                    return [
+                        {
                             "text": tweet.get("text", ""),
                             "tweet_id": tweet.get("tweet_id", ""),
                             "author_id": tweet.get("author_id", ""),
                             "created_at": tweet.get("created_at", ""),
-                        })
-                    return formatted_tweets
+                        }
+                        for tweet in current_tweets
+                    ]
                 
-                # Get most recent tweet ID while connection is still open
-                since_id = db.get_most_recent_tweet_id()
-                
+                # 3. Try to fetch new tweets
                 try:
-                    # Fetch new tweets from Twitter
+                    since_id = db.get_most_recent_tweet_id()
+                    print(f"Fetching new tweets since ID: {since_id}")
+                    
                     response = self.api.get_home_timeline(
                         tweet_fields=["text", "created_at", "author_id"],
                         max_results=10,
                         since_id=since_id
                     )
                     
-                    if hasattr(response, "data"):
-                        formatted_tweets = []
-                        for tweet in response.data:
-                            formatted_tweets.append({
+                    if hasattr(response, "data") and response.data:
+                        formatted_tweets = [
+                            {
                                 "tweet_id": str(tweet.id),
                                 "text": tweet.text,
                                 "created_at": tweet.created_at,
                                 "author_id": tweet.author_id,
-                            })
-
-                        # Save tweets to database while still in the context
+                            }
+                            for tweet in response.data
+                        ]
+                        
+                        # Store new tweets in DB
                         db.add_tweets(formatted_tweets)
-                        print(f"Added {len(formatted_tweets)} tweets to the database")
+                        print(f"Added {len(formatted_tweets)} new tweets to database")
                         return formatted_tweets
                     
-                    return []
+                    # 4. If no new tweets, fall back to DB
+                    print("No new tweets found, using cached tweets")
+                    return current_tweets if current_tweets else []
                     
                 except tweepy.TooManyRequests as e:
                     print(f"Rate limit hit: {e}. Using cached tweets")
                     return current_tweets if current_tweets else []
                 except Exception as e:
-                    print(f"Unexpected error fetching tweets: {e}")
-                    return []
+                    print(f"Error fetching tweets: {e}. Using cached tweets")
+                    return current_tweets if current_tweets else []
                 
         except Exception as e:
-            print(f"An unexpected error occurred reading tweets: {str(e)}")
-            return []  # Changed from string to empty list for consistency
+            print(f"Critical error in ReadTweetsTool: {str(e)}")
+            return []
 
     def _arun(self) -> list:
-        return self._run()  # Use sync version
+        return self._run()
 
 
 class ReadMentionsTool(RateLimiter):
