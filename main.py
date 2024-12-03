@@ -1038,7 +1038,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        ask_agent_crypto_question = """What are the latest technical developments from {famous_accounts} that need analysis? Let's add value to the conversation and post it to the timeline. Prioritize the most relevant and impactful developments and replies to tweets of other accounts, especially {famous_accounts}."""
+        ask_agent_crypto_question = """What's the most technically significant development from {famous_accounts} happening right now that could help our frens? Read the timeline, check the facts, and share something truly valuable."""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
     except tweepy.Forbidden as fe:
