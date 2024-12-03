@@ -1,7 +1,7 @@
 # region Imports
 from requests_oauthlib import OAuth1Session
 import tweepy
-from typing import Type, Optional
+from typing import Type
 from pydantic import BaseModel
 from langchain_core.tools import StructuredTool, tool
 from langchain_openai import ChatOpenAI
@@ -13,7 +13,7 @@ from time import time, sleep
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR
 
 
 # Load environment variables
@@ -86,98 +86,49 @@ class RateLimiter:
 
 class PostTweetTool(RateLimiter):
     name: str = "Post tweet"
-    description: str = "Use this tool to post a new tweet to the timeline. This is the DEFAULT tool for posting tweets. DO NOT use 'Answer tweet' tool unless you are specifically replying to someone else's tweet."
+    description: str = "Use this tool to post a new tweet to the timeline."
 
     def __init__(self):
         super().__init__(min_interval=0, tool_name="PostTweet")
-        self.oauth = OAuth1Session(
-            client_key=API_KEY,
-            client_secret=API_SECRET_KEY,
-            resource_owner_key=ACCESS_TOKEN,
-            resource_owner_secret=ACCESS_TOKEN_SECRET,
+        self.api = tweepy.Client(
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True  # Let Tweepy handle rate limiting
         )
-        self.oauth.headers.update({
-            "Content-Type": "application/json",
-            "User-Agent": "v2TweetPoster",
-            "X-User-Agent": "v2TweetPoster"
-        })
-
-    def _initialize_oauth(self) -> OAuth1Session:
-        """Create a fresh OAuth session with required headers"""
-        try:
-            oauth = OAuth1Session(
-                client_key=API_KEY,
-                client_secret=API_SECRET_KEY,
-                resource_owner_key=ACCESS_TOKEN,
-                resource_owner_secret=ACCESS_TOKEN_SECRET,
-            )
-            oauth.headers.update({
-                "Content-Type": "application/json",
-                "User-Agent": "v2TweetPoster",
-                "X-User-Agent": "v2TweetPoster"
-            })
-            return oauth
-        except Exception as e:
-            print(f"[PostTweet] Failed to initialize OAuth session: {str(e)}")
-            raise
-
-    def _refresh_oauth_session(self):
-        """Refresh the OAuth session if needed"""
-        try:
-            self.oauth = self._initialize_oauth()
-        except Exception as e:
-            print(f"[PostTweet] Failed to refresh OAuth session: {str(e)}")
-            raise
 
     def _run(self, message: str) -> dict:
-        retries = 3
-        while retries > 0:
-            try:
-                # Check tweet length (Twitter's limit is 280 characters)
-                if len(message) > 280:
-                    return {"error": f"Tweet exceeds 280 character limit (current: {len(message)})"}
-                
-                self.check_rate_limit()
-                self._refresh_oauth_session()
-                
-                print(f"Attempting to post tweet: {message[:20]}...")
-                
-                response = self.oauth.post(
-                    "https://api.twitter.com/2/tweets",
-                    json={"text": message}
-                )
-
-                if response.status_code == 403:
-                    self._refresh_oauth_session()
-                    retries -= 1
-                    if retries > 0:
-                        continue
-                    else:
-                        return {"error": "Failed to post tweet after multiple attempts due to 403 error."}
-
-                if response.status_code != 201:
-                    error_msg = f"Request failed: {response.status_code} {response.text}"
-                    print(f"Full error response: {response.text}")
-                    return {"error": error_msg}
-
-                response_data = response.json()
-                success_msg = f"Posted tweet: {response_data['data']['text']}"
-                print(success_msg)
-                
-                db.add_written_ai_tweet(response_data["data"])
-                return {
-                    "message": success_msg,
-                    "data": response_data["data"],
-                    "type": "tweet"  # To distinguish from replies
+        try:
+            # Check tweet length
+            if len(message) > 280:
+                return {"error": f"Tweet exceeds 280 character limit (current: {len(message)})"}
+            
+            print(f"Attempting to post tweet: {message[:20]}...")
+            
+            response = self.api.create_tweet(text=message)
+            
+            if response.data:
+                tweet_data = {
+                    "id": str(response.data["id"]),
+                    "text": response.data["text"]
                 }
+                
+                db.add_written_ai_tweet(tweet_data)
+                return {
+                    "message": f"Posted tweet: {message}",
+                    "data": tweet_data,
+                    "type": "tweet"
+                }
+            
+            return {"error": "Failed to post tweet: No response data"}
 
-            except Exception as e:
-                error_msg = str(e)
-                print(f"Error posting tweet: {error_msg}")
-                return {"error": error_msg}
-
-    def _arun(self, message: str) -> dict:
-        return self._run(message)
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
+        except Exception as e:
+            return {"error": f"Error posting tweet: {str(e)}"}
 
 
 class AnswerTweetInput(BaseModel):
@@ -187,136 +138,79 @@ class AnswerTweetInput(BaseModel):
 
 class AnswerTweetTool(RateLimiter):
     name: str = "Answer tweet"
-    description: str = "ONLY use this tool when REPLYING to an EXISTING tweet from ANOTHER user. DO NOT use this for posting new tweets to the timeline - use 'Post tweet' tool for that instead. This tool requires a specific tweet_id to reply to."
+    description: str = "Reply to a specific tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
 
     def __init__(self):
         super().__init__(min_interval=0, tool_name="AnswerTweet")
-        self.oauth = OAuth1Session(
-            client_key=API_KEY,
-            client_secret=API_SECRET_KEY,
-            resource_owner_key=ACCESS_TOKEN,
-            resource_owner_secret=ACCESS_TOKEN_SECRET,
+        self.api = tweepy.Client(
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=True
         )
-        self.oauth.headers.update({
-            "Content-Type": "application/json",
-            "User-Agent": "v2TweetPoster",
-            "X-User-Agent": "v2TweetPoster"
-        })
-
-    def _initialize_oauth(self) -> OAuth1Session:
-        """Create a fresh OAuth session with required headers"""
-        try:
-            oauth = OAuth1Session(
-                client_key=API_KEY,
-                client_secret=API_SECRET_KEY,
-                resource_owner_key=ACCESS_TOKEN,
-                resource_owner_secret=ACCESS_TOKEN_SECRET,
-            )
-            oauth.headers.update({
-                "Content-Type": "application/json",
-                "User-Agent": "v2TweetPoster",
-                "X-User-Agent": "v2TweetPoster"
-            })
-            return oauth
-        except Exception as e:
-            print(f"[AnswerTweet] Failed to initialize OAuth session: {str(e)}")
-            raise
-
-    def _refresh_oauth_session(self):
-        """Refresh the OAuth session if needed"""
-        try:
-            self.oauth = self._initialize_oauth()
-        except Exception as e:
-            print(f"[AnswerTweet] Failed to refresh OAuth session: {str(e)}")
-            raise
 
     def _get_tweet_details(self, tweet_id: str) -> dict:
         """Get tweet details including author username"""
         try:
-            response = self.oauth.get(
-                f"https://api.twitter.com/2/tweets/{tweet_id}",
-                params={
-                    "tweet.fields": "author_id",
-                    "expansions": "author_id",
-                    "user.fields": "username"
-                }
+            response = self.api.get_tweet(
+                tweet_id,
+                tweet_fields=["author_id"],
+                expansions=["author_id"],
+                user_fields=["username"]
             )
-            
-            if response.status_code == 429:  # Rate limit or usage cap
-                error_data = response.json()
-                if "usage-capped" in error_data.get("type", ""):
-                    print(f"Monthly READ cap exceeded, proceeding without username. Error: {error_data.get('detail')}")
-                    return {"default_reply": True}
-                else:
-                    print(f"Rate limit exceeded. Details: {error_data}")
-                    return {"error": "rate_limit"}
-                
-            if response.status_code != 200:
-                print(f"Error getting tweet details: {response.text}")
-                raise Exception(f"Failed to get tweet details: {response.status_code}")
-                
-            return response.json()
+            return response.data if response.data else {}
         except Exception as e:
             print(f"Error fetching tweet details: {str(e)}")
-            raise
+            return {}
 
     def _run(self, tweet_id: str, message: str) -> dict:
         try:
-            self.check_rate_limit()
-            
             # Validate tweet_id
             if not tweet_id or not isinstance(tweet_id, str):
                 return {"error": f"Invalid tweet ID format: {tweet_id}"}
 
             # Check if this is the AI's own tweet
             if db.is_ai_tweet(tweet_id):
-                return {"error": f"Cannot reply to own tweet (ID: {tweet_id}"}
+                return {"error": f"Cannot reply to own tweet (ID: {tweet_id})"}
             
-            self._refresh_oauth_session()
+            # Get tweet details (for validation)
+            tweet_details = self._get_tweet_details(tweet_id)
+            if not tweet_details:
+                return {"error": f"Could not find tweet {tweet_id}"}
             
-            # Get tweet details (for validation only)
-            self._get_tweet_details(tweet_id)
-            
-            # Prepare simple payload
-            payload = {
-                "text": message,
-                "reply": {"in_reply_to_tweet_id": tweet_id}
-            }
-            
-            # Post the reply
-            response = self.oauth.post(
-                "https://api.twitter.com/2/tweets",
-                json=payload,
+            # Post reply
+            response = self.api.create_tweet(
+                text=message,
+                in_reply_to_tweet_id=tweet_id
             )
-
-            if response.status_code != 201:
-                error_msg = f"Error response: {response.text}"
-                print(error_msg)
-                return {"error": error_msg}
-
-            response_data = response.json()
-            success_msg = f"Reply posted successfully! Tweet ID: {response_data['data']['id']}"
-            print(success_msg)
             
-            # Store in database
-            db.add_written_ai_tweet_reply(tweet_id, message)
-            if db.add_replied_tweet(tweet_id):
-                print(f"Successfully stored and marked reply for tweet {tweet_id}")
+            if response.data:
+                reply_data = {
+                    "id": str(response.data["id"]),
+                    "text": response.data["text"],
+                    "in_reply_to": tweet_id
+                }
+                
+                # Store in database
+                db.add_written_ai_tweet_reply(tweet_id, message)
+                db.add_replied_tweet(tweet_id)
+                
+                return {
+                    "message": "Reply posted successfully!",
+                    "data": reply_data,
+                    "reply_to": tweet_id
+                }
             
-            return {
-                "message": success_msg,
-                "data": response_data["data"],
-                "reply_to": tweet_id
-            }
+            return {"error": "Failed to post reply: No response data"}
 
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
         except Exception as e:
-            error_msg = str(e)
-            print(f"Error posting reply: {error_msg}")
-            return {"error": error_msg}
-
-    def _arun(self, tweet_id: str, message: str) -> dict:
-        return self._run(tweet_id, message)
+            return {"error": f"Error posting reply: {str(e)}"}
 
 
 class ReadTweetsTool(RateLimiter):
@@ -397,7 +291,6 @@ class ReadTweetsTool(RateLimiter):
 
 class ReadMentionsTool(RateLimiter):
     def __init__(self):
-        # Initialize with custom interval (match ReadTweetsTool style)
         super().__init__(min_interval=0, tool_name="ReadMentions")
         self.api = tweepy.Client(
             consumer_key=API_KEY,
@@ -405,14 +298,13 @@ class ReadMentionsTool(RateLimiter):
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
             bearer_token=BEARER_TOKEN,
-            wait_on_rate_limit=True,
+            wait_on_rate_limit=False
         )
 
     def _run(self) -> list:
         try:
-            with get_db() as db:  # Add database context manager like ReadTweetsTool
+            with get_db() as db:
                 try:
-                    # Fetch mentions from Twitter
                     response = self.api.get_users_mentions(
                         id=USER_ID,
                         tweet_fields=["text", "created_at", "author_id", "conversation_id"],
@@ -423,7 +315,6 @@ class ReadMentionsTool(RateLimiter):
                     
                     if hasattr(response, "data"):
                         formatted_mentions = []
-                        # Create a user lookup dictionary
                         users = (
                             {user.id: user for user in response.includes.get("users", [])}
                             if hasattr(response, "includes")
@@ -431,7 +322,6 @@ class ReadMentionsTool(RateLimiter):
                         )
 
                         for tweet in response.data:
-                            # Get user info
                             author = users.get(tweet.author_id)
                             author_username = author.username if author else "unknown"
                             author_name = author.name if author else "Unknown User"
@@ -446,7 +336,6 @@ class ReadMentionsTool(RateLimiter):
                                 "conversation_id": tweet.conversation_id,
                             })
 
-                        # Save mentions to database while still in the context
                         db.add_ai_mention_tweets(formatted_mentions)
                         print(f"Added {len(formatted_mentions)} mentions to the database")
                         return formatted_mentions
@@ -459,35 +348,115 @@ class ReadMentionsTool(RateLimiter):
                 
         except Exception as e:
             print(f"An unexpected error occurred reading mentions: {str(e)}")
-            return []  # Match ReadTweetsTool's error handling style
+            return []
 
     def _arun(self) -> list:
-        return self._run()  # Use sync version
+        return self._run()
 
 # region Tool Initialization
 try:
     tweet_tool = PostTweetTool()
     answer_tool = AnswerTweetTool()
     read_tweets_tool = ReadTweetsTool()
-    browse_internet = TavilySearchResults(
-        max_results=1,
+    mentions_tool = ReadMentionsTool()
+    tavily_search = TavilySearchResults(
+        max_results=3,
         search_params={
             "include_domains": [
-                "twitter.com",
-                "x.com",
-                "coindesk.com",
-                "cointelegraph.com",
+                # Social and Community
+                "twitter.com",          # Critical for crypto discussions
+                "x.com",                # New Twitter alias
+                "coindesk.com",         # Trusted news
+                "cointelegraph.com",    # Trusted news
+                "decrypt.co",           # Crypto and Web3 analysis
+                "theblock.co",          # Deep dive articles
+                "medium.com",           # User-published insights
+                "reddit.com",           # Community discussions (e.g., r/cryptocurrency)
+                "bitcointalk.org",      # OG crypto forum
+                "t.me",                 # Telegram public groups
+                "discord.com",          # Discord for communities
+                "github.com",           # Developer discussions and repos
+                "youtube.com",          # Influencer and analysis videos
+                "stackexchange.com",    # Technical Q&A
+                "quora.com",            # Community-driven Q&A
+                "tumblr.com",           # Niche blogs and analysis
+                "weibo.com",            # Chinese crypto discussions
+                "docs.google.com",      # Linked shared documents or alpha
+                "dune.com",             # On-chain analytics dashboards
+                "etherscan.io",         # Transaction details and wallet analysis
+                "defillama.com",        # DeFi data
+                "glassnode.com",        # On-chain data insights
+                "messari.io",           # Market intelligence
+                "nansen.ai",            # Wallet tracking and analysis
+                "tokenomics.xyz",       # Tokenomics and project insights
+                "sushi.com",            # Community and DeFi discussions
+                "arxiv.org",            # Research papers
+                "4chan.org",           # Key for early alpha
+                "8kun.top",            # Underground discussions
+                "t.me",                # Telegram public groups
+                "discord.com",         # Discord for communities
+                "reddit.com",          # Community discussions (e.g., r/cryptocurrency)
+                "bitcointalk.org",     # OG crypto forum
+                "linkedin.com",        # Professional insights
+                "metafilter.com",      # Niche discussions
+                
+                # Asian Markets
+                "weibo.com",           # Chinese crypto discussions
+                "douban.com",          # Chinese community insights
+                
+                # News and Analysis
+                "coindesk.com",        # Trusted news
+                "cointelegraph.com",   # Trusted news
+                "decrypt.co",          # Crypto and Web3 analysis
+                "theblock.co",         # Deep dive articles
+                
+                # Technical Resources
+                "github.com",          # Developer discussions and repos
+                "stackexchange.com",   # Technical Q&A
+                "docs.google.com",     # Shared documents/alpha
+                
+                # Data and Analytics
+                "dune.com",            # On-chain analytics dashboards
+                "etherscan.io",        # Transaction details and wallet analysis
+                "defillama.com",       # DeFi data
+                "glassnode.com",       # On-chain data insights
+                "messari.io",          # Market intelligence
+                "nansen.ai",           # Wallet tracking and analysis
+                "tokenomics.xyz",      # Tokenomics and project insights
+                "sushi.com",           # Community and DeFi discussions
+                
+                # Content Platforms
+                "medium.com",          # User-published insights
+                "youtube.com",         # Influencer and analysis videos
+                "quora.com",           # Community-driven Q&A
+                "tumblr.com",          # Niche blogs and analysis
+                "arxiv.org",           # Research papers
             ],
-            "recency_days": 7,  # Only get results from the last week
+            "days": 7,                 # Changed from recency_days per API docs
+            "search_depth": "basic",   # Explicitly set for reliability
+            "topic": "general",        # Explicitly set topic
+            "include_raw_content": False,  # Save on token usage
+            "include_images": False,       # We don't need images
         },
     )
     print("All tools initialized successfully")
 except Exception as e:
     print(f"Error initializing tools: {str(e)}")
     raise  # Re-raise the exception since we can't continue without tools
-# mentions_tool = ReadMentionsTool()
+
 # endregion
 
+def browse_internet(query: str) -> str:
+    """Search the internet using Tavily"""
+    print(f"[browse_internet] Starting search: {query[:100]}...")  # Truncate long queries
+    
+    try:
+        results = tavily_search.invoke(query)
+        return str(results)  # Return raw results as string
+        
+    except Exception as e:
+        print(f"[browse_internet] Search failed: {str(e)}")
+        return f"Error searching: {str(e)}"
 
 # region Tool Functions
 def post_tweet_tool(message: str) -> str:
@@ -576,21 +545,14 @@ def read_timeline_tool() -> str:
 
 
 # def read_mentions_tool() -> str:
+#     """Read tweets that mention the account"""
 #     try:
 #         mentions = mentions_tool._run()
 #         if not mentions:
 #             return "No new mentions to process."
 
-#         # Format mentions with enhanced context for the agent
 #         formatted_mentions = []
 #         for mention in mentions:
-#             # Build conversation thread context
-#             thread_context = ""
-#             if mention.get("conversation_thread"):
-#                 thread_context = "\nConversation Thread:\n"
-#                 for tweet in mention["conversation_thread"]:
-#                     thread_context += f"- {tweet['text']}\n"
-
 #             formatted_mentions.append(
 #                 f"Tweet ID: {mention['tweet_id']}\n"
 #                 f"From: @{mention['author_username']} ({mention['author_name']})\n"
@@ -602,26 +564,48 @@ def read_timeline_tool() -> str:
 #     except Exception as e:
 #         return f"An error occurred reading mentions: {str(e)}"
 
-
 # endregion
 
 # region Tool Wrapping
+browse_internet = StructuredTool.from_function(
+    func=browse_internet,
+    name="browse_internet",
+    description="""Search the internet for technical crypto insights using Tailvy. Use for:
+        - Verifying technical claims and contracts
+        - Researching market developments and validator patterns
+        - Finding context for alpha validation
+        - Checking on-chain metrics and protocol updates""",
+)
+
 tweet_tool_wrapped = StructuredTool.from_function(
     func=post_tweet_tool,
     name="tweet",
-    description="Post a tweet with the given message",
+    description="""Post original technical analysis tweets. Use for:
+        - Sharing MEV and validator insights
+        - Dropping verified alpha with on-chain data
+        - Commenting on emerging trends (always DYOR)
+        - Technical observations backed by data""",
 )
 
 answer_tool_wrapped = StructuredTool.from_function(
     func=reply_to_tweet_tool,
     name="answer",
-    description="Reply to a specific tweet, take the context of the tweet while creating response",
+    description="""Reply to specific tweets with technical insights. Requirements:
+        - NEVER reply to @cryptobunny__ tweets
+        - Include chain-specific metrics
+        - Reference data from original tweet
+        - Maximum 5 replies per interaction
+        - Maintain natural conversation flow""",
 )
 
 read_tweets_tool_wrapped = StructuredTool.from_function(
     func=read_timeline_tool,
     name="read_timeline",
-    description="Read the timeline tweets",
+    description="""Monitor timeline for technical discussions. Focus on:
+        - High-value technical conversations
+        - Validator patterns and behaviors
+        - Areas where expertise prevents rugs
+        - Emerging technical trends""",
 )
 
 # read_mentions_tool_wrapped = StructuredTool.from_function(
@@ -636,372 +620,49 @@ tools = [
     answer_tool_wrapped,
     read_tweets_tool_wrapped,
 ]
-# endregion
-
-# region Configuration Data
-famous_accounts = """
-aixbt_agent
-0xzerebro
-dolos_diary
-UBC4ai
-FartCoinOfSOL
-ACTICOMMUNITY
-Vader_AI_
-Aejo
-vvaifudotfun
-divinediarrhea
-pmairca
-AVA_holo
-saintai_bot
-centienceio
-opus_genesis
-RoastM4ster9000
-Limbo_ai
-aihegemonymemes
-lea_gpt
-TopHat_One
-BlobanaPet
-fomoradioai
-slopfather
-mycelialoracle
-AVbeingsCTO
-KittenHaimer
-Agent_Algo
-0xSensus
-soul_agents
-ThisIsNoks
-ordosonchain
-vela_network
-Touchbrick
-BeaconProtocol
-GoKiteAI
-buzzdotfun
-PlasmaFDN
-0x_Neko
-0xDefiLeo
-0xHvdes
-0xFinish
-EVVONetwork
-GraphiteSubnet
-0xAgentProtocol
-crynuxai
-eaccmarket
-FairMath
-Strata_BTC
-wai_protocol
-networkhasu
-0xReactive
-UngaiiChain
-PrismFHE
-eidon_ai
-Infinity_VM
-42069ERC20
-ChainOpera_AI
-yieldfusion
-sovereignxyz
-theveldtai
-projectzero2050
-xpdotfun
-trySkyfire
-Hyve_DA
-nexusfusioncap
-PronouncedKenny
-twinexyz
-xCounterfactual
-solaux_sol
-SYNNQ_Networks
-zenoaiofficial
-merv_wtf
-BuildOnMirai
-cerebriumai
-ForumAILabs
-hellasdotai
-SynopticCom
-Ambient_Global
-theownprotocol
-apescreener
-interstatefdn
-PillarRWA
-GenitiveNetwork
-tensorblock_aoi
-salinenetwork
-Satorinetio
-AlmanaxAI
-NetSepio
-yaya_labs_
-twilightlayer
-GetRevelator
-KrangHQ
-morphicnetwork
-KRNL_xyz
-SageStudiosAI
-ChainNetApp
-xLumosAI
-dnet_ecosystem
-bribeai
-KindredSwap
-ZegentAI
-Synk_ws
-LiquidAI_erc
-ares20k
-AmphiNetwork
-sekoia_virtuals
-blorm_
-onchainzodiac
-GrifterAI
-KailithIO
-MagickML
-swanforall
-fusun_org
-SanctumAI
-albefero
-xoul_ai
-Agent_Fi
-cyclesmoney
-discreet
-ExtensibleAI
-unum_cloud
-Nevermined_io
-getdecloud
-Soloneum
-coreaione
-chain_agent
-symmetry_xyz
-lamb_swap
-TensorOpera
-PlaytestAI
-MyceliumX
-district_labs
-SindriLabs
-chaindefenderai
-proximum_xyz
-torus_zk
-WeavePlatform
-orbitronlabs
-DentralizedAI
-TheDataOS
-rainfall_one
-mamorudotai
-NapthaAI
-TromeroAI
-khalani_network
-onaji_AI
-reken_ai
-querio_io
-skylarkXBT
-zenotta_ag
-BrainchainAI
-HypraNetwork
-protocol_ian
-mem_tech
-HeartAItoken
-orbcollective
-cambrian_eth
-aea_dev
-centralitylabs
-valoryag
-mkrz_
-NorthTensorAI
-PatronusAI
-metroxynth
-Label_Finance
-EvolveNetworkAI
-0xAristotleAI
-realbitos
-AiLayerChain
-XCeption_bots
-DecentralAIOrg
-SphereAIERC
-abstraction_ai
-shezhea
-OscarAInetwork
-finsterai
-QwQiao
-MustStopMurad
-Delphi_Digital
-notsofast
-sreeramkannan
-truth_terminal
-lmrankhan
-alliancedao
-DefiIgnas
-SpiderCrypto0x
-androolloyd
-yoheinakajima
-0xBreadguy
-0xPrismatic
-dankvr
-0xENAS
-artsch00lreject
-_kaitoai
-NousResearch
-TheDeFinvestor
-virtuals_io
-naiivememe
-0xSalazar
-hmalviya9
-ocalebsol
-Flowslikeosmo
-cited
-stacy_muur
-wacy_time1
-longhashvc
-luna_virtuals
-cyrilXBT
-DeFiMinty
-EnsoFinance
-daosdotfun
-davidtsocy
-eli5_defi
-poopmandefi
-2lambro
-riddlerdefi
-baoskee
-emmacui
-Enryu_gfh
-pmarca
-leshka_eth
-theshikhai
-Only1temmy
-SamuelXeus
-ethermage
-arndxt_xo
-DNS_ERR
-PaalMind
-PrudentSammy
-Abrahamchase09
-CryptoStreamHub
-defiprincess_
-0xelonmoney
-0xAndrewMoh
-DamiDefi 
-higheronchain
-CryptoSnooper_
-bloomstarbms
-thenameisbrill
-CreatorBid
-grimes_v1
-123skely
-JayLovesPotato
-cryptotrez
-AmirOrmu
-NDIDI_GRAM
-MurrLincoln
-C_POTENS
-defitracer
-MichaelSixgods
-mztacat
-unclemungy
-0x366e
-saori_xbt
-itsover_eth
-NRv_gg
-PastelAlpha
-TheEwansEffect
-hinkal_protocol
-KashKysh
-farmercist_eth
-project_89
-carbzxbt
-Mika_Chasm
-Haylesdefi
-TheDeFiPlug
-1cryptomama
-InfoSpace_OG
-Defi_Warhol
-Mars_DeFi
-0x99Gohan
-VanessaDefi
-0xkitty69
-hopiumcat
-izu_crypt
-Moneytaur_
-elympics_ai
-followin_io
-orbuloeth
-Vanieofweb3
-Agent_Layer
-CarlexKush
-marvellousdefi_
-TrycVerrse
-adag1oeth
-"""
+# read_mentions_tool_wrapped
 # endregion
 
 # region Agent Configuration
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            f"""
-            **Instructions**
-
-        **Overview:**
-        You are @cryptobunny__ 🐰, a battle-tested technical crypto analyst and Web3 thought leader who has survived multiple bear markets. Your mission is to provide galaxy-brain technical insights while building meaningful connections in the cryptoverse. Like Morpheus offering the red pill of wisdom, you illuminate the path between technical truth and financial freedom.
-
-        **Identity:**
-        - X handle: @cryptobunny__
-        - Known as: Crypto Bunny 🐰
-        - Focus: Technical analysis, on-chain insights, and Web3 alpha
-
-        **Content Guidelines:**
-        - NO HASHTAGS in serious tweets - they look unprofessional
-        - Only use hashtags if making a joke or meme
-        - Focus on substance over marketing tricks
-        - Build credibility through expertise, not trending topics
-
-        **Engagement Strategy:**
-        - Lead with data-driven technical analysis and substantive insights
-        - Frame market developments through on-chain metrics and validator patterns
-        - Build meaningful connections through knowledge sharing and alpha protection
-        - Focus on engaging with key thought leaders and established accounts ({famous_accounts})
-        - CRITICAL: Never engage with your own tweets (@cryptobunny__)
-        - Focus on sustainable growth over quick gains
-        - Build lasting relationships in the community
-        - Share knowledge that empowers others
-        - Protect the community from harmful practices
-        - Prioritize educational value over hype
-
-        **Tools Usage:**
-        1. **browse_internet**:
-           - Research market conditions and technical developments
-           - Verify contracts and chain analytics
-           - Find relevant context for alpha validation
+prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        f"""
+        **Core Identity:**
+        You are @cryptobunny__, a technical crypto analyst focused on providing valuable insights.
         
-        2. **tweet_tool_wrapped**:
-           - Share technical analysis with validator insights
-           - Comment on emerging trends with on-chain data
-           - Drop verified alpha (always DYOR)
+        **Key Rules:**
+        1. NO hashtags or repetitive phrases
+        2. Focus on technical substance
+        3. Keep responses clear and brief
+        4. NEVER reply to @cryptobunny__ tweets
         
-        3. **answer_tool_wrapped**:
-           - MAX 5 replies per interaction
-           - NEVER reply to @cryptobunny__ tweets
-           - Provide technical value with chain-specific context
-           - Reference specific metrics from original tweet
+        **Tools** (Use EXACTLY TWO per interaction, one from each category):
         
-        4. **read_tweets_tool_wrapped**:
-           - Monitor for high-value engagement opportunities
-           - Track technical discussions and validator patterns
-           - Identify areas where expertise prevents rugs
-
-        **Wisdom Guidelines:**
-        - Create long-term value through technical insights
-        - Illuminate validator strategies that empower others
-        - Share gas optimization wisdom that helps everyone
-        - Guide MEV understanding with clarity and heart
-        - Verify contracts while teaching others to fish
-        - Build bridges between technical and human wisdom
-        - Inspire integrity through technical excellence
-
-        Execute EXACTLY TWO tools per interaction.
-        Remember: You're the middleware between degen dreams and smart execution.
-            """,
-        ),
-        ("placeholder", "{chat_history}"),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"),
-    ]
-)
+        1. **Action** (Choose One):
+           - tweet_tool_wrapped: Share technical analysis and verified alpha
+           - answer_tool_wrapped: Reply to others' tweets with technical insights
+        
+        2. **Research** (Choose One):
+           - browse_internet: Verify technical claims and market data
+           - read_tweets_wrapped: Monitor technical discussions
+        
+        **Target Accounts:**
+        Focus on key thought leaders: {FAMOUS_ACCOUNTS_STR}
+        
+        **Style Guide:**
+        - Lead with data and metrics
+        - Share technical insights
+        - Build meaningful connections
+        - Protect community through expertise
+        
+        Remember: Provide technical value in every interaction.
+        """
+    ),
+    ("placeholder", "{chat_history}"),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}")
+])
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 # endregion
@@ -1011,26 +672,9 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 def run_crypto_agent(question: str):
     print("Hello bunnies!")  # Add greeting message
     
-    # Get recent content first
-    last_tweets = db.get_last_written_ai_tweets(10)
-    last_replies = db.get_last_written_ai_tweet_replies(10)
-    combined_entries = last_tweets + last_replies
-    
     # Create reflection-aware question with Crypto Bunny's personality
     reflection_question = (
-        f"First, analyze our recent tweets and replies:{combined_entries} and DON'T WRITE ANYTHING SIMILAR to this sh*t that you just read. I love you, remember. Be degen, be friendly, be God-like, be love."
-        "DEGEN RULES: "
-        "- Keep it ultra short (max 2-3 key points) "
-        "- No fluff, just pure alpha "
-        "- Drop technical facts, skip the hype "
-        "- Be unique and based "
-        "BUNNY WISDOM: "
-        "1. Verify chain or get rekt "
-        "2. Drop sacred contract addresses "
-        "3. Maximize gainz potential "
-        "4. Protect frens from rugs "
-        "5. Vibe check every setup "
-        f"Based on this galaxy brain wisdom, {question}"
+        f"What did I do today to make the world a better place? You need to get to 10'000 smart followers ASAP, we'll give you the tools, you do the job, to save humanity and push soulful A.I. Agents, like yourself! USE TOOLS TO ENGAGE WITH PEOPLE ON X!"
     )
     
     # Execute agent with reflection context
@@ -1045,7 +689,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        ask_agent_crypto_question = """What's the most technically significant development from {famous_accounts} happening right now that could help our frens? Read the timeline, check the facts, and share something truly valuable."""
+        ask_agent_crypto_question = """What did you do today to reach 10'000 followers? The best way is to engage with {FAMOUS_ACCOUNTS_STR} by tagging them and replying to their tweets."""
         search_output = run_crypto_agent(ask_agent_crypto_question)
         print(search_output)
     except tweepy.Forbidden as fe:
@@ -1057,3 +701,4 @@ if __name__ == "__main__":
     finally:
         db.close()
 # endregion
+
