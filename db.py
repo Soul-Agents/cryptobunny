@@ -457,15 +457,44 @@ class TweetDB:
             return []
 
     def is_ai_tweet(self, tweet_id: str) -> bool:
-        """Check if a tweet reply was created by the AI"""
+        """Check if a tweet was created by the AI"""
         try:
-            # Check in written_ai_tweets_replies collection
-            ai_tweet = self.written_ai_tweets_replies.find_one({"tweet_id": tweet_id})
+            # Check in written_ai_tweets collection
+            ai_tweet = self.written_ai_tweets.find_one({"tweet_id": tweet_id})
             if ai_tweet:
                 return True
 
+            # Check if it's a reply to the AI's own tweet
+            ai_reply = self.written_ai_tweets_replies.find_one({"tweet_id": tweet_id})
+            if ai_reply:
+                return True
+
+            return False
+
         except Exception as e:
             print(f"Error checking if tweet is from AI: {e}")
+            return False
+
+    def add_replied_mention(self, tweet_id: str) -> bool:
+        """Mark a mention as replied to in the database"""
+        try:
+            result = self.ai_mention_tweets.update_one(
+                {"tweet_id": tweet_id},
+                {"$set": {"replied_to": True, "replied_at": datetime.now(timezone.utc)}},
+                upsert=True
+            )
+            return result.modified_count > 0
+        except Exception as e:
+            print(f"[DB] Error marking mention as replied: {str(e)}")
+            return False
+
+    def is_mention_replied(self, tweet_id: str) -> bool:
+        """Check if a mention has already been replied to"""
+        try:
+            mention = self.ai_mention_tweets.find_one({"tweet_id": tweet_id, "replied_to": True})
+            return mention is not None
+        except Exception as e:
+            print(f"Error checking if mention is replied: {e}")
             return False
 
     def __enter__(self):
