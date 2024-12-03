@@ -376,9 +376,12 @@ class ReadTweetsTool(RateLimiter):
                     
                     return []
                     
-                except tweepy.TooManyRequests:
-                    print("Rate limit hit, using cached tweets")
+                except tweepy.TooManyRequests as e:
+                    print(f"Rate limit hit: {e}. Using cached tweets")
                     return current_tweets if current_tweets else []
+                except Exception as e:
+                    print(f"Unexpected error fetching tweets: {e}")
+                    return []
                 
         except Exception as e:
             print(f"An unexpected error occurred reading tweets: {str(e)}")
