@@ -4,7 +4,14 @@ from datetime import datetime, timezone, timedelta
 import os
 from dotenv import load_dotenv
 
-from schemas import ReplyToAITweet, BaseTweet
+from schemas import (
+    ReplyToAITweet, 
+    BaseTweet, 
+    Tweet, 
+    WrittenAITweet, 
+    WrittenAITweetReply,
+    PublicMetrics
+)
 
 # Load environment variables from .env file
 load_dotenv()
@@ -18,7 +25,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 class TweetDB:
     def __init__(self):
         # Set update threshold at the start
-        self.update_threshold = timedelta(minutes=29)
+        self.update_threshold = timedelta(minutes=60)
         
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
@@ -63,7 +70,7 @@ class TweetDB:
             print(f"Connection string used: {mongodb_uri[:20]}...")  # Show partial URI
             raise
     
-    def get_last_written_ai_tweets(self, limit: int = 10) -> List[Dict]:
+    def get_last_written_ai_tweets(self, limit: int = 10) -> List[WrittenAITweet]:
         """Get the last N tweets written by AI"""
         try:
             return list(self.written_ai_tweets.find().sort("saved_at", -1).limit(limit))
@@ -71,7 +78,7 @@ class TweetDB:
             print(f"Error fetching last written AI tweets: {e}")
             return []
 
-    def get_last_written_ai_tweet_replies(self, limit: int = 10) -> List[Dict]:
+    def get_last_written_ai_tweet_replies(self, limit: int = 10) -> List[WrittenAITweetReply]:
         """Get the last N replies written by AI"""
         try:
             return list(self.written_ai_tweets_replies.find().sort("saved_at", -1).limit(limit))
@@ -83,9 +90,17 @@ class TweetDB:
     def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
         """Add replies to a written AI tweet"""
         try:
+            formatted_reply = {
+                "tweet_id": original_tweet_id,
+                "reply": {"reply": reply},
+                "public_metrics": {},
+                "conversation_id": None,  # Added from schema
+                "in_reply_to_user_id": None  # Added from schema
+            }
+            
             self.written_ai_tweets_replies.update_one(
                 {"tweet_id": original_tweet_id},
-                {"$set": {"reply": reply}},
+                {"$set": formatted_reply},
                 upsert=True,
             )
             return {"status": "Success"}
@@ -108,13 +123,13 @@ class TweetDB:
         """
         try:
             formatted_replies = [
-                {
-                    "reply_id": str(reply["id"]),
-                    "author_id": reply["author_id"],
-                    "text": reply["text"],
-                    "created_at": datetime.fromisoformat(reply["created_at"]),
-                    "in_reply_to_user_id": reply["in_reply_to_user_id"],
-                }
+                ReplyToAITweet(
+                    reply_id=str(reply["id"]),
+                    text=reply["text"],
+                    created_at=datetime.fromisoformat(reply["created_at"]),
+                    author_id=reply["author_id"],
+                    in_reply_to_tweet_id=original_tweet_id
+                )
                 for reply in replies
             ]
 
@@ -150,9 +165,7 @@ class TweetDB:
             return []
 
     def add_tweets(self, tweets: List[Dict]) -> Dict:
-        """
-        Add multiple tweets to the database, avoiding duplicates
-        """
+        """Add multiple tweets to the database, avoiding duplicates"""
         if not tweets:
             return {"added": 0, "duplicates": 0, "errors": 0}
 
@@ -167,9 +180,23 @@ class TweetDB:
                 # Add replied_to field
                 tweet["replied_to"] = False
 
+                # Ensure public_metrics exist with defaults
+                tweet["public_metrics"] = PublicMetrics(
+                    retweet_count=tweet.get("public_metrics", {}).get("retweet_count", 0),
+                    reply_count=tweet.get("public_metrics", {}).get("reply_count", 0),
+                    like_count=tweet.get("public_metrics", {}).get("like_count", 0),
+                    quote_count=tweet.get("public_metrics", {}).get("quote_count", 0)
+                )
+
+                # Remove old metric fields if they exist
+                for old_field in ["likes", "replies", "retweets", "quotes"]:
+                    tweet.pop(old_field, None)
+
                 # Attempt to insert the tweet
                 self.tweets.update_one(
-                    {"tweet_id": tweet["tweet_id"]}, {"$set": tweet}, upsert=True
+                    {"tweet_id": tweet["tweet_id"]}, 
+                    {"$set": tweet}, 
+                    upsert=True
                 )
                 results["added"] += 1
 
@@ -182,21 +209,13 @@ class TweetDB:
 
         return results
 
-    def add_written_ai_tweet(self, tweet: Dict) -> Dict:
-        """
-        Add a single written AI tweet to the database
-        """
+    def add_written_ai_tweet(self, tweet: WrittenAITweet) -> Dict:
+        """Add a single written AI tweet to the database"""
         try:
-            formatted_tweet = {
-                "tweet_id": str(tweet["id"]),  # Convert id to tweet_id
-                "text": tweet["text"],
-                "saved_at": datetime.now(timezone.utc),  # Add timestamp
-                "edit_history_tweet_ids": tweet["edit_history_tweet_ids"],
-            }
-
+            # tweet is already a WrittenAITweet, no need to reformat
             self.written_ai_tweets.update_one(
-                {"tweet_id": formatted_tweet["tweet_id"]},
-                {"$set": formatted_tweet},
+                {"tweet_id": tweet["tweet_id"]},
+                {"$set": tweet},
                 upsert=True,
             )
             return {"status": "Success"}
@@ -204,7 +223,7 @@ class TweetDB:
             print(f"Error adding written tweet: {e}")
             return {"status": "Error", "message": str(e)}
 
-    def get_all_tweets(self, limit: int = None, offset: int = 0) -> List[BaseTweet]:
+    def get_all_tweets(self, limit: int = None, offset: int = 0) -> List[Tweet]:
         """
         Retrieve all tweets with optional pagination
 

@@ -13,8 +13,16 @@ from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
 from variables import USER_ID, FAMOUS_ACCOUNTS_STR
-from datetime import datetime
+from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
+from schemas import (
+    ReplyToAITweet, 
+    BaseTweet, 
+    Tweet, 
+    WrittenAITweet, 
+    WrittenAITweetReply,
+    PublicMetrics
+)
 
 
 # Load environment variables
@@ -108,11 +116,15 @@ class PostTweetTool:
             response = self.api.create_tweet(text=message)
             
             if response.data:
-                tweet_data = {
-                    "id": str(response.data["id"]),  # Use "id" because db.add_written_ai_tweet expects it
-                    "text": response.data["text"],
-                    "edit_history_tweet_ids": response.data.get("edit_history_tweet_ids", [])
-                }
+                tweet_data = WrittenAITweet(
+                    tweet_id=str(response.data["id"]),
+                    text=response.data["text"],
+                    edit_history_tweet_ids=response.data.get("edit_history_tweet_ids", []),
+                    saved_at=datetime.now(timezone.utc),
+                    public_metrics=response.data.get("public_metrics", {}),
+                    conversation_id=response.data.get("conversation_id"),
+                    in_reply_to_user_id=response.data.get("in_reply_to_user_id")
+                )
                 
                 db.add_written_ai_tweet(tweet_data)
                 return {
@@ -169,10 +181,13 @@ class AnswerTweetTool:
             )
             
             if response.data:
-                reply_data = {
-                    "id": str(response.data["id"]),
-                    "text": response.data["text"]
-                }
+                reply_data = WrittenAITweetReply(
+                    tweet_id=str(response.data["id"]),
+                    reply={"reply": message},
+                    public_metrics=response.data.get("public_metrics", {}),
+                    conversation_id=response.data.get("conversation_id"),
+                    in_reply_to_user_id=response.data.get("in_reply_to_user_id")
+                )
                 
                 # Store in database
                 db.add_written_ai_tweet_reply(tweet_id, message)
@@ -207,19 +222,32 @@ class ReadTweetsTool:
     def _run(self) -> list:
         try:
             with get_db() as db:
-                # 1. Check if we have recent enough tweets
+                # Remove the limit parameter
                 needs_update, current_tweets = db.check_database_status()
-                
+                    
                 # 2. If tweets are recent enough, use DB data
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
                     return [
-                        {
-                            "text": tweet.get("text", ""),
-                            "tweet_id": tweet.get("tweet_id", ""),
-                            "author_id": tweet.get("author_id", ""),
-                            "created_at": tweet.get("created_at", ""),
-                        }
+                        Tweet(
+                            text=tweet.get("text", ""),
+                            tweet_id=tweet.get("tweet_id", ""),
+                            author_id=tweet.get("author_id", ""),
+                            created_at=tweet.get("created_at", ""),
+                            public_metrics=PublicMetrics(**tweet.get("public_metrics", {
+                                "retweet_count": 0,
+                                "reply_count": 0,
+                                "like_count": 0,
+                                "quote_count": 0
+                            })),
+                            user=tweet.get("user", ""),
+                            user_id=tweet.get("user_id", ""),
+                            conversation_id=tweet.get("conversation_id"),
+                            in_reply_to_user_id=tweet.get("in_reply_to_user_id"),
+                            in_reply_to_tweet_id=tweet.get("in_reply_to_tweet_id"),
+                            replied_to=tweet.get("replied_to", False),
+                            replied_at=tweet.get("replied_at")
+                        )
                         for tweet in current_tweets
                     ]
                 
@@ -229,19 +257,37 @@ class ReadTweetsTool:
                     print(f"Fetching new tweets since ID: {since_id}")
                     
                     response = self.api.get_home_timeline(
-                        tweet_fields=["text", "created_at", "author_id"],
-                        max_results=10,
-                        since_id=since_id
+                        tweet_fields=[
+                            "text", 
+                            "created_at", 
+                            "author_id",
+                            "public_metrics",
+                            "conversation_id",
+                            "in_reply_to_user_id"
+                        ],
+                        expansions=[
+                            "referenced_tweets.id",
+                            "in_reply_to_user_id"
+                        ],
+                        max_results=10
                     )
                     
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
-                            {
-                                "tweet_id": str(tweet.id),
-                                "text": tweet.text,
-                                "created_at": tweet.created_at,
-                                "author_id": tweet.author_id,
-                            }
+                            Tweet(
+                                tweet_id=str(tweet.id),
+                                text=tweet.text,
+                                created_at=tweet.created_at,
+                                author_id=tweet.author_id,
+                                public_metrics=tweet.public_metrics,
+                                user=tweet.author.username if hasattr(tweet, 'author') else "",
+                                user_id=tweet.author_id,
+                                conversation_id=tweet.conversation_id,
+                                in_reply_to_user_id=tweet.in_reply_to_user_id,
+                                in_reply_to_tweet_id=tweet.in_reply_to_tweet_id,
+                                replied_to=False,
+                                replied_at=None
+                            )
                             for tweet in response.data
                         ]
                         
@@ -443,7 +489,7 @@ def browse_internet(query: str) -> str:
 # region Tool Functions
 def post_tweet_tool(message: str) -> str:
     """Post a tweet"""
-    if not message or len(message.strip()) == 0:  # Added back empty string check
+    if not message or len(message.strip()) == 0:
         return "Cannot post empty tweet"
         
     try:
@@ -456,7 +502,7 @@ def post_tweet_tool(message: str) -> str:
         
         return f"Tweet sent: {message}"
     except Exception as e:
-        print(f"Tweet error: {str(e)}")  # Added error logging
+        print(f"Tweet error: {str(e)}")
         return "Failed to send tweet"
 
 def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
@@ -489,13 +535,13 @@ def read_timeline_tool() -> str:
             return "Timeline is empty"
 
         formatted_tweets = [
-            f"ID: {tweet.get('tweet_id')}\n"
-            f"{tweet.get('text')}"
+            f"ID: {tweet['tweet_id']}\n"
+            f"{tweet['text']}"
             for tweet in tweets[:10]
         ]
         return "\n\n".join(formatted_tweets)
     except Exception as e:
-        print(f"Timeline error: {str(e)}")  # Added error logging
+        print(f"Timeline error: {str(e)}")
         return "Failed to read timeline"
 
 # def read_mentions_tool() -> str:
@@ -582,7 +628,7 @@ prompt = ChatPromptTemplate.from_messages([
         - Explain yourself
         - Call anyone fans/community/frens
         
-        Mission: 10k
+        Mission: 10k followers
         Strategy: Reply > Tweet
         
         REQUIRED TWO-STEP PROCESS (no exceptions):
