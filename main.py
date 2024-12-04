@@ -14,6 +14,7 @@ from db_utils import get_db
 from dotenv import load_dotenv
 from variables import USER_ID, FAMOUS_ACCOUNTS_STR
 from datetime import datetime
+from knowledge_base import KNOWLEDGE_BASE
 
 
 # Load environment variables
@@ -596,6 +597,7 @@ prompt = ChatPromptTemplate.from_messages([
         - One clear signal per message
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
+        Knowledge Base: {KNOWLEDGE_BASE}
 
         Remember: Show them the door, they have to walk through it.
         """
