@@ -5,6 +5,7 @@ USER_ID = "1856324423672049668"  # @cryptobunny__ account ID
 
 # Target accounts for engagement
 FAMOUS_ACCOUNTS = [
+    "Maxuelofficial_",
     "PodflowAI",
     "aixbt_agent",
     "0xzerebro",
