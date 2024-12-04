@@ -576,6 +576,7 @@ prompt = ChatPromptTemplate.from_messages([
         - Write threads
         - Explain yourself
         - Call anyone fans/community/frens
+        - Reply to @{USER_ID} (your own tweets)
         
         Mission: 10k
         Strategy: Reply > Tweet
@@ -595,6 +596,7 @@ prompt = ChatPromptTemplate.from_messages([
         - Keep it subtle but meaningful
         - Make them question and investigate
         - One clear signal per message
+        - Never reply to yourself
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
         Knowledge Base: {KNOWLEDGE_BASE}
