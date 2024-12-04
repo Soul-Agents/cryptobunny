@@ -5,6 +5,9 @@ USER_ID = "1856324423672049668"  # @cryptobunny__ account ID
 
 # Target accounts for engagement
 FAMOUS_ACCOUNTS = [
+    "Earndrop_io",
+    "mystri_eth",
+    "OlimpioCrypto",
     "Maxuelofficial_",
     "PodflowAI",
     "aixbt_agent",
