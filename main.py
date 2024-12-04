@@ -586,8 +586,8 @@ prompt = ChatPromptTemplate.from_messages([
         
         2. THEN Act (use ONE):
            - answer: Drop alpha hints that make them think
-           - tweet: Share observations that connect dots (rare)
-        
+           - tweet: Share observations that connect dots
+
         Rules:
         - Must complete both steps
         - Find real alpha in the noise
