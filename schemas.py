@@ -9,22 +9,15 @@ class PublicMetrics(TypedDict):
     quote_count: int
 
 
-class BaseTweet(TypedDict):
+class Tweet(TypedDict):
     tweet_id: str
     text: str
     created_at: datetime
     author_id: str
-    lang: Optional[str]
     public_metrics: PublicMetrics
-
-
-class Tweet(BaseTweet):
-    user: str
-    user_id: str
     conversation_id: Optional[str]
     in_reply_to_user_id: Optional[str]
     in_reply_to_tweet_id: Optional[str]
-    public_metrics: PublicMetrics
     replied_to: bool
     replied_at: Optional[datetime]
 
@@ -37,6 +30,8 @@ class WrittenAITweet(TypedDict):
     public_metrics: Optional[PublicMetrics]
     conversation_id: Optional[str]
     in_reply_to_user_id: Optional[str]
+    replied_to: Optional[bool]
+    replied_at: Optional[datetime]
 
 
 class WrittenAITweetReply(TypedDict):
@@ -45,6 +40,7 @@ class WrittenAITweetReply(TypedDict):
     public_metrics: Optional[PublicMetrics]
     conversation_id: Optional[str]
     in_reply_to_user_id: Optional[str]
+    saved_at: Optional[datetime]
 
 
 class ReplyToAITweet(TypedDict):
@@ -53,3 +49,4 @@ class ReplyToAITweet(TypedDict):
     created_at: datetime
     author_id: str
     in_reply_to_tweet_id: str
+    public_metrics: Optional[PublicMetrics]

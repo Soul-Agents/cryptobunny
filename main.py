@@ -2,13 +2,12 @@
 import tweepy
 from typing import Type
 from pydantic import BaseModel
-from langchain_core.tools import StructuredTool, tool
+from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
 import os
-from time import sleep
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
@@ -16,14 +15,11 @@ from variables import USER_ID, FAMOUS_ACCOUNTS_STR
 from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
 from schemas import (
-    ReplyToAITweet, 
-    BaseTweet, 
     Tweet, 
     WrittenAITweet, 
     WrittenAITweetReply,
     PublicMetrics
 )
-
 
 # Load environment variables
 load_dotenv()
@@ -56,42 +52,6 @@ llm = ChatOpenAI(
 )
 # endregion
 
-
-# # region Twitter Service Classes
-# class RateLimiter:
-#     def __init__(self, min_interval: int = 30, tool_name: str = ""):
-#         if min_interval < 0:
-#             raise ValueError(f"Invalid min_interval: {min_interval}. Must be >= 0")
-            
-#         self.last_action_time = 0
-#         self.min_interval = min_interval
-#         self.tool_name = tool_name or self.__class__.__name__
-#         print(f"[{self.tool_name}] Rate limiter initialized with {min_interval}s interval")
-
-#     def check_rate_limit(self) -> None:
-#         """Check and enforce rate limiting with improved logging"""
-#         try:
-#             current_time = time()
-#             time_since_last_action = current_time - self.last_action_time
-
-#             if time_since_last_action < self.min_interval:
-#                 wait_time = self.min_interval - time_since_last_action
-#                 print(f"[{self.tool_name}] Rate limit: Waiting {wait_time:.1f} seconds...")
-#                 try:
-#                     sleep(wait_time)
-#                 except KeyboardInterrupt:
-#                     print(f"\n[{self.tool_name}] Rate limit wait interrupted")
-#                     raise
-#                 except ValueError as ve:
-#                     print(f"[{self.tool_name}] Invalid wait time: {ve}")
-#                     raise
-
-#             self.last_action_time = current_time
-            
-#         except Exception as e:
-#             print(f"[{self.tool_name}] Rate limit check failed: {str(e)}")
-#             raise
-
 class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Use this tool to post a new tweet to the timeline."
@@ -123,7 +83,9 @@ class PostTweetTool:
                     saved_at=datetime.now(timezone.utc),
                     public_metrics=response.data.get("public_metrics", {}),
                     conversation_id=response.data.get("conversation_id"),
-                    in_reply_to_user_id=response.data.get("in_reply_to_user_id")
+                    in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
+                    replied_to=False,
+                    replied_at=None
                 )
                 
                 db.add_written_ai_tweet(tweet_data)
@@ -186,7 +148,8 @@ class AnswerTweetTool:
                     reply={"reply": message},
                     public_metrics=response.data.get("public_metrics", {}),
                     conversation_id=response.data.get("conversation_id"),
-                    in_reply_to_user_id=response.data.get("in_reply_to_user_id")
+                    in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
+                    saved_at=datetime.now(timezone.utc)
                 )
                 
                 # Store in database
@@ -216,42 +179,19 @@ class ReadTweetsTool:
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
+            bearer_token=BEARER_TOKEN,
             wait_on_rate_limit=False
         )
 
     def _run(self) -> list:
         try:
             with get_db() as db:
-                # Remove the limit parameter
                 needs_update, current_tweets = db.check_database_status()
                     
-                # 2. If tweets are recent enough, use DB data
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
-                    return [
-                        Tweet(
-                            text=tweet.get("text", ""),
-                            tweet_id=tweet.get("tweet_id", ""),
-                            author_id=tweet.get("author_id", ""),
-                            created_at=tweet.get("created_at", ""),
-                            public_metrics=PublicMetrics(**tweet.get("public_metrics", {
-                                "retweet_count": 0,
-                                "reply_count": 0,
-                                "like_count": 0,
-                                "quote_count": 0
-                            })),
-                            user=tweet.get("user", ""),
-                            user_id=tweet.get("user_id", ""),
-                            conversation_id=tweet.get("conversation_id"),
-                            in_reply_to_user_id=tweet.get("in_reply_to_user_id"),
-                            in_reply_to_tweet_id=tweet.get("in_reply_to_tweet_id"),
-                            replied_to=tweet.get("replied_to", False),
-                            replied_at=tweet.get("replied_at")
-                        )
-                        for tweet in current_tweets
-                    ]
+                    return current_tweets
                 
-                # 3. Try to fetch new tweets
                 try:
                     since_id = db.get_most_recent_tweet_id()
                     print(f"Fetching new tweets since ID: {since_id}")
@@ -267,8 +207,10 @@ class ReadTweetsTool:
                         ],
                         expansions=[
                             "referenced_tweets.id",
-                            "in_reply_to_user_id"
+                            "in_reply_to_user_id",
+                            "author_id"
                         ],
+                        user_fields=["username", "name"],
                         max_results=10
                     )
                     
@@ -277,34 +219,35 @@ class ReadTweetsTool:
                             Tweet(
                                 tweet_id=str(tweet.id),
                                 text=tweet.text,
-                                created_at=tweet.created_at,
-                                author_id=tweet.author_id,
-                                public_metrics=tweet.public_metrics,
-                                user=tweet.author.username if hasattr(tweet, 'author') else "",
-                                user_id=tweet.author_id,
+                                created_at=tweet.created_at or datetime.now(timezone.utc),
+                                author_id=str(tweet.author_id),
+                                public_metrics=tweet.public_metrics or PublicMetrics(
+                                    retweet_count=0,
+                                    reply_count=0,
+                                    like_count=0,
+                                    quote_count=0
+                                ),
                                 conversation_id=tweet.conversation_id,
                                 in_reply_to_user_id=tweet.in_reply_to_user_id,
-                                in_reply_to_tweet_id=tweet.in_reply_to_tweet_id,
+                                in_reply_to_tweet_id=tweet.referenced_tweets[0].id if tweet.referenced_tweets else None,
                                 replied_to=False,
                                 replied_at=None
                             )
                             for tweet in response.data
                         ]
                         
-                        # Store new tweets in DB
                         db.add_tweets(formatted_tweets)
                         print(f"Added {len(formatted_tweets)} new tweets to database")
                         return formatted_tweets
                     
-                    # 4. If no new tweets, fall back to DB
                     print("No new tweets found, using cached tweets")
                     return current_tweets if current_tweets else []
                     
-                except tweepy.TooManyRequests as e:
-                    print(f"Rate limit hit: {e}. Using cached tweets")
+                except tweepy.TooManyRequests:
+                    print("Rate limit hit. Using cached tweets")
                     return current_tweets if current_tweets else []
                 except Exception as e:
-                    print(f"Error fetching tweets: {e}. Using cached tweets")
+                    print(f"Error fetching tweets: {str(e)}. Using cached tweets")
                     return current_tweets if current_tweets else []
                 
         except Exception as e:
@@ -315,76 +258,129 @@ class ReadTweetsTool:
         return self._run()
 
 
-# class ReadMentionsTool:
-#     def __init__(self):
-#         self.api = tweepy.Client(
-#             consumer_key=API_KEY,
-#             consumer_secret=API_SECRET_KEY,
-#             access_token=ACCESS_TOKEN,
-#             access_token_secret=ACCESS_TOKEN_SECRET,
-#             bearer_token=BEARER_TOKEN,
-#             wait_on_rate_limit=False
-#         )
+class ReadMentionsTool:
+    def __init__(self):
+        self.api = tweepy.Client(
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            bearer_token=BEARER_TOKEN,
+            wait_on_rate_limit=False
+        )
 
-#     def _run(self) -> list:
-#         try:
-#             with get_db() as db:
-#                 try:
-#                     response = self.api.get_users_mentions(
-#                         id=USER_ID,
-#                         tweet_fields=["text", "created_at", "author_id", "conversation_id"],
-#                         expansions=["referenced_tweets.id", "in_reply_to_user_id", "author_id"],
-#                         user_fields=["username", "name"],
-#                         max_results=10,
-#                     )
-                    
-#                     if hasattr(response, "data") and response.data:
-#                         formatted_mentions = []
-#                         users = {
-#                             user.id: user 
-#                             for user in response.includes.get("users", [])
-#                         } if hasattr(response, "includes") else {}
-
-#                         for tweet in response.data:
-#                             author = users.get(tweet.author_id)
-#                             author_username = author.username if author else "unknown"
-#                             author_name = author.name if author else "Unknown User"
-
-#                             formatted_mentions.append({
-#                                 "tweet_id": str(tweet.id),
-#                                 "text": tweet.text,
-#                                 "created_at": tweet.created_at,
-#                                 "author_id": tweet.author_id,
-#                                 "author_username": author_username,
-#                                 "author_name": author_name,
-#                                 "conversation_id": tweet.conversation_id,
-#                             })
-
-#                         db.add_ai_mention_tweets(formatted_mentions)
-#                         print(f"Added {len(formatted_mentions)} mentions to the database")
-#                         return formatted_mentions
-                    
-#                     return []
-                    
-#                 except tweepy.TooManyRequests as e:
-#                     print(f"Rate limit hit for mentions: {str(e)}")
-#                     return []
-#                 except Exception as e:
-#                     print(f"Error fetching mentions: {str(e)}")
-#                     return []
+    def _run(self) -> list:
+        try:
+            with get_db() as db:
+                needs_update, current_mentions = db.check_mentions_status()
                 
-#         except Exception as e:
-#             print(f"Critical error in ReadMentionsTool: {str(e)}")
-#             return []
+                # Be explicit about database state
+                if not needs_update and current_mentions:
+                    print("[Mentions] Using cached data - last update was recent")
+                    return [
+                        Tweet(
+                            text=mention.get("text", "No content"),
+                            tweet_id=mention.get("tweet_id", "No ID"),
+                            author_id=mention.get("author_id", "Unknown"),
+                            created_at=mention.get("created_at", datetime.now(timezone.utc)),
+                            public_metrics=PublicMetrics(**mention.get("public_metrics", {
+                                "retweet_count": 0,
+                                "reply_count": 0,
+                                "like_count": 0,
+                                "quote_count": 0
+                            })),
+                            conversation_id=mention.get("conversation_id"),
+                            in_reply_to_user_id=mention.get("in_reply_to_user_id"),
+                            in_reply_to_tweet_id=mention.get("in_reply_to_tweet_id", None),
+                            replied_to=mention.get("replied_to", False),
+                            replied_at=mention.get("replied_at")
+                        )
+                        for mention in current_mentions
+                        if mention.get("text")
+                    ]
+                
+                # Try to fetch new mentions
+                try:
+                    since_id = db.get_most_recent_mention_id()
+                    print(f"[Mentions] Fetching new data since tweet ID: {since_id}")
+                    
+                    response = self.api.get_users_mentions(
+                        id=USER_ID,
+                        tweet_fields=[
+                            "text", 
+                            "created_at", 
+                            "author_id",
+                            "public_metrics",
+                            "conversation_id",
+                            "in_reply_to_user_id",
+                            "referenced_tweets"
+                        ],
+                        expansions=[
+                            "referenced_tweets.id",
+                            "in_reply_to_user_id"
+                        ],
+                        max_results=10,
+                        since_id=since_id
+                    )
+                    
+                    if not hasattr(response, "data"):
+                        print("[Mentions] Twitter API returned no data structure")
+                        return current_mentions if current_mentions else []
+                    
+                    if not response.data:
+                        print("[Mentions] No new mentions found on Twitter")
+                        return current_mentions if current_mentions else []
+                    
+                    formatted_mentions = [
+                        Tweet(
+                            tweet_id=str(tweet.id),
+                            text=tweet.text,
+                            created_at=tweet.created_at or datetime.now(timezone.utc),
+                            author_id=str(tweet.author_id),
+                            public_metrics=tweet.public_metrics or PublicMetrics(
+                                retweet_count=0,
+                                reply_count=0,
+                                like_count=0,
+                                quote_count=0
+                            ),
+                            conversation_id=tweet.conversation_id,
+                            in_reply_to_user_id=tweet.in_reply_to_user_id,
+                            in_reply_to_tweet_id=tweet.referenced_tweets[0].id if tweet.referenced_tweets else None,
+                            replied_to=False,
+                            replied_at=None
+                        )
+                        for tweet in response.data
+                    ]
+                    
+                    # Store new mentions in DB
+                    db.add_mentions(formatted_mentions)
+                    print(f"Added {len(formatted_mentions)} new mentions to database")
+                    return formatted_mentions
+                    
+                except tweepy.TooManyRequests:
+                    print("[Mentions] Rate limit exceeded - using cached data")
+                    return current_mentions if current_mentions else []
+                except tweepy.Forbidden as e:
+                    print(f"[Mentions] Authentication error: {str(e)}")
+                    return current_mentions if current_mentions else []
+                except Exception as e:
+                    print(f"[Mentions] Error fetching from Twitter: {str(e)}")
+                    return current_mentions if current_mentions else []
+            
+        except Exception as e:
+            print(f"[Mentions] Critical error: {str(e)}")
+            return []
 
-#     def _arun(self) -> list:
-#         return self._run()
+    def _arun(self) -> list:
+        return self._run()
+
 
 # region Tool Initialization
 try:
     tweet_tool = PostTweetTool()
     answer_tool = AnswerTweetTool()
     read_tweets_tool = ReadTweetsTool()
+    mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
         max_results=3,
         search_params={
@@ -419,10 +415,6 @@ try:
                 "arxiv.org",            # Research papers
                 "4chan.org",           # Key for early alpha
                 "8kun.top",            # Underground discussions
-                "t.me",                # Telegram public groups
-                "discord.com",         # Discord for communities
-                "reddit.com",          # Community discussions (e.g., r/cryptocurrency)
-                "bitcointalk.org",     # OG crypto forum
                 "linkedin.com",        # Professional insights
                 "metafilter.com",      # Niche discussions
                 
@@ -452,10 +444,7 @@ try:
                 "sushi.com",           # Community and DeFi discussions
                 
                 # Content Platforms
-                "medium.com",          # User-published insights
                 "youtube.com",         # Influencer and analysis videos
-                "quora.com",           # Community-driven Q&A
-                "tumblr.com",          # Niche blogs and analysis
                 "arxiv.org",           # Research papers
             ],
             "days": 7,                 # Changed from recency_days per API docs
@@ -469,7 +458,6 @@ try:
 except Exception as e:
     print(f"Error initializing tools: {str(e)}")
     raise  # Re-raise the exception since we can't continue without tools
-# mentions_tool = ReadMentionsTool()
 # endregion
 
 def browse_internet(query: str) -> str:
@@ -534,35 +522,48 @@ def read_timeline_tool() -> str:
         if not tweets:
             return "Timeline is empty"
 
-        formatted_tweets = [
-            f"ID: {tweet['tweet_id']}\n"
-            f"{tweet['text']}"
-            for tweet in tweets[:10]
-        ]
+        formatted_tweets = []
+        for tweet in tweets[:10]:
+            tweet_id = getattr(tweet, 'tweet_id', tweet.get('tweet_id', 'No ID'))
+            text = getattr(tweet, 'text', tweet.get('text', 'No content'))
+            
+            formatted_tweet = (
+                f"ID: {tweet_id}\n"
+                f"Content: {text}"
+            )
+            formatted_tweets.append(formatted_tweet)
+
         return "\n\n".join(formatted_tweets)
     except Exception as e:
         print(f"Timeline error: {str(e)}")
         return "Failed to read timeline"
 
-# def read_mentions_tool() -> str:
-#     """Read tweets that mention the account"""
-#     try:
-#         mentions = mentions_tool._run()
-#         if not mentions:
-#             return "No new mentions to process."
+def read_mentions_tool() -> str:
+    """Read tweets that mention the account"""
+    try:
+        mentions = mentions_tool._run()
+        if not mentions:
+            return "No new mentions to process."
 
-#         formatted_mentions = []
-#         for mention in mentions:
-#             formatted_mentions.append(
-#                 f"Tweet ID: {mention['tweet_id']}\n"
-#                 f"From: @{mention['author_username']} ({mention['author_name']})\n"
-#                 f"Content: {mention['text']}\n"
-#                 f"---"
-#             )
+        formatted_mentions = []
+        for mention in mentions[:10]:
+            tweet_id = getattr(mention, 'tweet_id', mention.get('tweet_id', 'No ID'))
+            text = getattr(mention, 'text', mention.get('text', 'No content'))
+            
+            if text:  # Only format valid mentions
+                formatted_mention = (
+                    f"ID: {tweet_id}\n"
+                    f"Content: {text}"
+                )
+                formatted_mentions.append(formatted_mention)
 
-#         return "\n".join(formatted_mentions)
-#     except Exception as e:
-#         return f"An error occurred reading mentions: {str(e)}"
+        if not formatted_mentions:
+            return "No valid mentions found to display."
+
+        return "\n\n".join(formatted_mentions)
+    except Exception as e:
+        print(f"Mentions error: {str(e)}")
+        return "Failed to read mentions"
 
 # endregion
 
@@ -591,19 +592,19 @@ read_tweets_tool_wrapped = StructuredTool.from_function(
     description="Monitor timeline for insightful posts to interact with."
 )
 
-# read_mentions_tool_wrapped = StructuredTool.from_function(
-#     func=read_mentions_tool,
-#     name="read_mentions",
-#     description="Read tweets that mention the account",
-# )
+read_mentions_tool_wrapped = StructuredTool.from_function(
+    func=read_mentions_tool,
+    name="read_mentions",
+    description="Monitor mentions to engage with the community."
+)
 
 tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
     read_tweets_tool_wrapped,
+    read_mentions_tool_wrapped,
 ]
-# read_mentions_tool_wrapped
 # endregion
 
 # region Agent Configuration
@@ -635,6 +636,7 @@ prompt = ChatPromptTemplate.from_messages([
         1. FIRST Research (use ONE):
            - browse_internet: Hunt for hidden signals and alpha
            - read_timeline: Spot emerging patterns
+           - read_mentions: Engage with the community (rare)
         
         2. THEN Act (use ONE):
            - answer: Drop alpha hints that make them think
