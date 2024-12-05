@@ -17,7 +17,13 @@ def extract_entities(text):
     return [ent.text for ent in doc.ents]  # Extracts entities
 
 
+class BrowseResult(TypedDict):
+    query: str
+    summary: str
+    timestamp: datetime
+    urls: List[str]
 
+This (above) could be added and stored, no need for a summary tho.
 
 
 Dynamic Prompt Generation:
