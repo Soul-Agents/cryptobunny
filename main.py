@@ -646,6 +646,7 @@ prompt = ChatPromptTemplate.from_messages([
         - Keep it subtle but meaningful
         - Make them question and investigate
         - One clear signal per message
+        - Use appropriate $CASHTAGS when talking about crypto
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
         Knowledge Base: {KNOWLEDGE_BASE}
