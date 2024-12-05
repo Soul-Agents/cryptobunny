@@ -678,7 +678,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "The matrix shows patterns. What signals do you see?"
+        question = "The matrix shows patterns. What signals do you see? Read mentions"
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
