@@ -5,8 +5,7 @@ import os
 from dotenv import load_dotenv
 
 from schemas import (
-    ReplyToAITweet, 
-    BaseTweet, 
+    ReplyToAITweet,  
     Tweet, 
     WrittenAITweet, 
     WrittenAITweetReply,
@@ -24,8 +23,8 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 
 class TweetDB:
     def __init__(self):
-        # Set update threshold at the start
-        self.update_threshold = timedelta(minutes=60)
+        # Set update threshold to 1 minute for testing
+        self.update_threshold = timedelta(minutes=1)
         
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
@@ -53,7 +52,7 @@ class TweetDB:
             
             # Test connection
             self.client.admin.command('ping')
-            print("Successfully connected to MongoDB!")
+            print("[DB] Successfully connected to MongoDB!")
             
             # Initialize collections with explicit database name
             self.db = self.client['tweets']  # Specify database name explicitly
@@ -64,10 +63,13 @@ class TweetDB:
             
             # Create index
             self.tweets.create_index("tweet_id", unique=True)
+            self.ai_mention_tweets.create_index("tweet_id", unique=True)
+            self.written_ai_tweets.create_index("tweet_id", unique=True)
+            self.written_ai_tweets_replies.create_index("tweet_id", unique=True)
             
         except Exception as e:
-            print(f"Failed to connect to MongoDB: {e}")
-            print(f"Connection string used: {mongodb_uri[:20]}...")  # Show partial URI
+            print(f"[DB] Failed to connect to MongoDB: {e}")
+            print(f"[DB] Connection string used: {mongodb_uri[:20]}...")  # Show partial URI
             raise
     
     def get_last_written_ai_tweets(self, limit: int = 10) -> List[WrittenAITweet]:
@@ -90,17 +92,18 @@ class TweetDB:
     def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
         """Add replies to a written AI tweet"""
         try:
-            formatted_reply = {
-                "tweet_id": original_tweet_id,
-                "reply": {"reply": reply},
-                "public_metrics": {},
-                "conversation_id": None,  # Added from schema
-                "in_reply_to_user_id": None  # Added from schema
-            }
+            reply_data = WrittenAITweetReply(
+                tweet_id=original_tweet_id,
+                reply={"reply": reply},
+                public_metrics={},
+                conversation_id=None,
+                in_reply_to_user_id=None,
+                saved_at=datetime.now(timezone.utc)
+            )
             
             self.written_ai_tweets_replies.update_one(
                 {"tweet_id": original_tweet_id},
-                {"$set": formatted_reply},
+                {"$set": reply_data},
                 upsert=True,
             )
             return {"status": "Success"}
@@ -108,32 +111,12 @@ class TweetDB:
             print(f"[DB] Error adding written AI tweet reply: {e}")
             return {"status": "Error", "message": str(e)}
 
-    def add_replies_to_ai_tweet(
-        self, original_tweet_id: str, replies: List[Dict]
-    ) -> Dict:
-        """
-        Add replies array to an AI tweet document
-
-        Args:
-            original_tweet_id (str): The ID of the original AI tweet
-            replies (List[Dict]): List of reply objects from Twitter API
-
-        Returns:
-            Dict: Results of the operation
-        """
+    def add_replies_to_ai_tweet(self, original_tweet_id: str, replies: List[Dict]) -> Dict:
+        """Add replies array to an AI tweet document"""
         try:
-            formatted_replies = [
-                ReplyToAITweet(
-                    reply_id=str(reply["id"]),
-                    text=reply["text"],
-                    created_at=datetime.fromisoformat(reply["created_at"]),
-                    author_id=reply["author_id"],
-                    in_reply_to_tweet_id=original_tweet_id
-                )
-                for reply in replies
-            ]
+            # Replies are already formatted by Twitter API, just need to convert to our schema
+            formatted_replies = [ReplyToAITweet(**reply) for reply in replies]
 
-            # Add/update the replies array in the original tweet document
             self.written_ai_tweets.update_one(
                 {"tweet_id": original_tweet_id},
                 {"$set": {"replies": formatted_replies}},
@@ -165,34 +148,38 @@ class TweetDB:
             return []
 
     def add_tweets(self, tweets: List[Dict]) -> Dict:
-        """Add multiple tweets to the database, avoiding duplicates"""
+        """Add multiple tweets to the database"""
         if not tweets:
             return {"added": 0, "duplicates": 0, "errors": 0}
 
         results = {"added": 0, "duplicates": 0, "errors": 0}
 
-        for tweet in tweets:
+        for tweet_data in tweets:
             try:
-                # Add timestamp if not present
-                if "created_at" not in tweet:
-                    tweet["created_at"] = datetime.now(timezone.utc)
-
-                # Add replied_to field
-                tweet["replied_to"] = False
-
-                # Ensure public_metrics exist with defaults
-                tweet["public_metrics"] = PublicMetrics(
-                    retweet_count=tweet.get("public_metrics", {}).get("retweet_count", 0),
-                    reply_count=tweet.get("public_metrics", {}).get("reply_count", 0),
-                    like_count=tweet.get("public_metrics", {}).get("like_count", 0),
-                    quote_count=tweet.get("public_metrics", {}).get("quote_count", 0)
+                # Handle Twitter API v2 format
+                tweet = Tweet(
+                    tweet_id=str(tweet_data.get("id") or tweet_data.get("tweet_id")),
+                    text=tweet_data.get("text", ""),
+                    created_at=tweet_data.get("created_at", datetime.now(timezone.utc)),
+                    author_id=str(tweet_data.get("author_id", "")),
+                    public_metrics=PublicMetrics(
+                        retweet_count=tweet_data.get("public_metrics", {}).get("retweet_count", 0),
+                        reply_count=tweet_data.get("public_metrics", {}).get("reply_count", 0),
+                        like_count=tweet_data.get("public_metrics", {}).get("like_count", 0),
+                        quote_count=tweet_data.get("public_metrics", {}).get("quote_count", 0)
+                    ),
+                    conversation_id=tweet_data.get("conversation_id"),
+                    in_reply_to_user_id=tweet_data.get("in_reply_to_user_id"),
+                    in_reply_to_tweet_id=tweet_data.get("in_reply_to_tweet_id", tweet_data.get("referenced_tweet_id")),
+                    replied_to=tweet_data.get("replied_to", False),
+                    replied_at=tweet_data.get("replied_at")
                 )
 
-                # Remove old metric fields if they exist
-                for old_field in ["likes", "replies", "retweets", "quotes"]:
-                    tweet.pop(old_field, None)
+                if not tweet["tweet_id"] or not tweet["text"]:
+                    print(f"Skipping invalid tweet: {tweet_data}")
+                    results["errors"] += 1
+                    continue
 
-                # Attempt to insert the tweet
                 self.tweets.update_one(
                     {"tweet_id": tweet["tweet_id"]}, 
                     {"$set": tweet}, 
@@ -206,22 +193,22 @@ class TweetDB:
                 else:
                     results["errors"] += 1
                     print(f"Error adding tweet: {e}")
+                    print(f"Problematic tweet data: {tweet_data}")
 
         return results
 
     def add_written_ai_tweet(self, tweet: WrittenAITweet) -> Dict:
         """Add a single written AI tweet to the database"""
         try:
-            # tweet is already a WrittenAITweet, no need to reformat
             self.written_ai_tweets.update_one(
                 {"tweet_id": tweet["tweet_id"]},
                 {"$set": tweet},
                 upsert=True,
             )
-            return {"status": "Success"}
+            return {"status": "Success", "added": 1}
         except Exception as e:
-            print(f"Error adding written tweet: {e}")
-            return {"status": "Error", "message": str(e)}
+            print(f"[DB] Error adding written tweet: {e}")
+            return {"status": "Error", "message": str(e), "added": 0}
 
     def get_all_tweets(self, limit: int = None, offset: int = 0) -> List[Tweet]:
         """
@@ -377,10 +364,10 @@ class TweetDB:
         Returns:
             Dict: Results of the operation with counts of added, duplicate, and error tweets
         """
-        results = {"added": 0, "duplicates": 0, "errors": 0}
-
         if not tweets:
-            return results
+            return {"added": 0, "duplicates": 0, "errors": 0}
+
+        results = {"added": 0, "duplicates": 0, "errors": 0}
 
         for tweet in tweets:
             try:
@@ -388,9 +375,23 @@ class TweetDB:
                 if "created_at" not in tweet:
                     tweet["created_at"] = datetime.now(timezone.utc)
 
+                # Add replied_to field if not present
+                if "replied_to" not in tweet:
+                    tweet["replied_to"] = False
+
+                # Ensure public_metrics exist with defaults
+                tweet["public_metrics"] = PublicMetrics(
+                    retweet_count=tweet.get("public_metrics", {}).get("retweet_count", 0),
+                    reply_count=tweet.get("public_metrics", {}).get("reply_count", 0),
+                    like_count=tweet.get("public_metrics", {}).get("like_count", 0),
+                    quote_count=tweet.get("public_metrics", {}).get("quote_count", 0)
+                )
+
                 # Attempt to insert the tweet
                 self.ai_mention_tweets.update_one(
-                    {"tweet_id": tweet["tweet_id"]}, {"$set": tweet}, upsert=True
+                    {"tweet_id": tweet["tweet_id"]},
+                    {"$set": tweet},
+                    upsert=True
                 )
                 results["added"] += 1
 
@@ -515,6 +516,95 @@ class TweetDB:
         except Exception as e:
             print(f"Error checking if mention is replied: {e}")
             return False
+
+    def check_mentions_status(self) -> tuple[bool, list]:
+        """
+        Check mentions status and determine if update is needed
+
+        Returns:
+            tuple[bool, list]: (needs_update, current_mentions)
+        """
+        # Get latest 100 mentions from database
+        current_mentions = self.ai_mention_tweets.find({}).sort("created_at", -1).limit(100)
+        current_mentions_list = list(current_mentions)
+
+        if not current_mentions_list:
+            return True, []
+
+        # Get the most recent mention's timestamp
+        most_recent_mention = current_mentions_list[0]
+        most_recent_time = most_recent_mention.get("created_at")
+
+        # If no timestamp exists, we need to update
+        if most_recent_time is None or most_recent_time.tzinfo is None:
+            return True, current_mentions_list
+
+        # Only compare times if we have a valid timestamp
+        current_time = datetime.now(timezone.utc)
+        time_since_update = current_time - most_recent_time
+        needs_update = time_since_update > self.update_threshold
+
+        print(f"Most recent mention time: {most_recent_time}")
+        print(f"Time since mention update: {time_since_update}")
+        print(f"Needs mention update: {needs_update}")
+
+        return needs_update, current_mentions_list
+
+    def get_most_recent_mention_id(self) -> str | None:
+        """
+        Get the ID of the most recent mention in the database
+
+        Returns:
+            str | None: The most recent mention ID or None if no mentions exist
+        """
+        try:
+            most_recent = self.ai_mention_tweets.find_one(
+                {}, sort=[("tweet_id", -1)]  # Sort by tweet_id in descending order
+            )
+            return most_recent["tweet_id"] if most_recent else None
+        except Exception as e:
+            print(f"Error fetching most recent mention ID: {e}")
+            return None
+
+    def add_mentions(self, mentions: List[Dict]) -> Dict:
+        """Add multiple mentions to the database"""
+        if not mentions:
+            return {"added": 0, "duplicates": 0, "errors": 0}
+
+        results = {"added": 0, "duplicates": 0, "errors": 0}
+
+        for mention_data in mentions:
+            try:
+                # Ensure all required fields are present
+                mention = {
+                    "tweet_id": str(mention_data.get("id") or mention_data.get("tweet_id")),
+                    "text": mention_data.get("text", ""),
+                    "created_at": mention_data.get("created_at", datetime.now(timezone.utc)),
+                    "replied_to": mention_data.get("replied_to", False),
+                    "replied_at": mention_data.get("replied_at")
+                }
+
+                # Only store if we have the minimum required data
+                if mention["tweet_id"] and mention["text"]:
+                    self.ai_mention_tweets.update_one(
+                        {"tweet_id": mention["tweet_id"]},
+                        {"$set": mention},
+                        upsert=True
+                    )
+                    results["added"] += 1
+                else:
+                    print(f"Skipping invalid mention data: {mention_data}")
+                    results["errors"] += 1
+
+            except Exception as e:
+                if "duplicate key error" in str(e).lower():
+                    results["duplicates"] += 1
+                else:
+                    results["errors"] += 1
+                    print(f"Error adding mention: {e}")
+                    print(f"Problematic mention data: {mention_data}")
+
+        return results
 
     def __enter__(self):
         return self

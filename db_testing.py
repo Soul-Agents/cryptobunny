@@ -5,73 +5,151 @@ import json
 from bson import json_util
 from typing import List, Dict, Any
 import os
+from dotenv import load_dotenv
+from db import TweetDB
+from db_utils import get_db
+
+# Load environment variables
+load_dotenv()
 
 # MongoDB connection details
-MONGODB_URL = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
-MONGODB_URI = os.getenv("MONGODB_URI")  # Fallback to MONGODB_URI
-DB_NAME = "tweets"  # Changed from "twitter_bot"
+MONGODB_URL = os.getenv("MONGODB_URL")
+MONGODB_URI = os.getenv("MONGODB_URI")
+DB_NAME = "tweets"
 
-def connect_to_mongodb():
-    """Create a MongoDB client and return database connection"""
+def get_mongodb_client():
+    """Create a MongoDB client with context manager"""
     try:
-        # Try to get the public MongoDB URL first
-        mongodb_uri = MONGODB_URL
+        mongodb_uri = os.getenv("MONGODB_URL")
         
         if not mongodb_uri or "railway.internal" in mongodb_uri:
-            # Fallback to MONGODB_URI if URL contains internal references
-            mongodb_uri = MONGODB_URI
+            mongodb_uri = os.getenv("MONGODB_URI")
         
         if not mongodb_uri:
             raise ValueError("No valid MongoDB connection string found")
             
         client = MongoClient(mongodb_uri)
         client.admin.command('ping')
-        print("Successfully connected to MongoDB!")
-        return client[DB_NAME]
+        print("[DB] Successfully connected to MongoDB!")
+        return client
     except Exception as e:
-        print(f"Failed to connect to MongoDB: {e}")
+        print(f"[DB] Failed to connect to MongoDB: {e}")
         raise
 
-def get_all_collections_data() -> Dict[str, List[Dict[str, Any]]]:
-    """Fetch all data from all collections"""
-    db = connect_to_mongodb()
-    collections = db.list_collection_names()
-    
-    print(f"\nFound {len(collections)} collections: {', '.join(collections)}")
-    
-    all_data = {}
-    for collection_name in collections:
-        try:
-            collection_data = list(db[collection_name].find())
-            # Convert ObjectId to string for JSON serialization
-            collection_data = json.loads(json_util.dumps(collection_data))
-            all_data[collection_name] = collection_data
-            print(f"Retrieved {len(collection_data)} documents from {collection_name}")
-        except Exception as e:
-            print(f"Error retrieving data from {collection_name}: {e}")
-    
-    return all_data
+class MongoDBConnection:
+    def __init__(self):
+        self.client = None
+        self.db = None
 
-def export_to_json():
-    """Export all collections to a single JSON file"""
-    data = get_all_collections_data()
-    export_dir = "exports"
+    def __enter__(self):
+        self.client = get_mongodb_client()
+        self.db = self.client[DB_NAME]
+        return self.db
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            self.client.close()
+            print("[DB] MongoDB connection closed")
+
+def cleanup_collections(db):
+    """Hard delete everything that doesn't match the schema"""
+    # Define exact schema fields
+    tweet_fields = {
+        "tweet_id", "text", "created_at", "author_id", "lang",
+        "public_metrics", "conversation_id", "in_reply_to_user_id",
+        "in_reply_to_tweet_id", "replied_to", "replied_at"
+    }
     
-    # Create exports directory if it doesn't exist
-    os.makedirs(export_dir, exist_ok=True)
+    written_ai_tweet_fields = {
+        "tweet_id", "edit_history_tweet_ids", "saved_at", "text",
+        "public_metrics", "conversation_id", "in_reply_to_user_id",
+        "replied_to", "replied_at"
+    }
+    
+    written_ai_tweet_reply_fields = {
+        "tweet_id", "reply", "public_metrics", "conversation_id",
+        "in_reply_to_user_id", "saved_at"
+    }
+    
+    ai_mention_tweet_fields = {
+        "tweet_id", "text", "created_at", "replied_to", "replied_at"
+    }
     
     try:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = os.path.join(export_dir, f"export_all_{timestamp}.json")
-        with open(filename, 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"Exported all collections to {filename}")
+        # Clean up tweets collection
+        result_tweets = db.tweets.delete_many({
+            "$or": [
+                {"tweet_id": {"$exists": False}},
+                {"text": {"$exists": False}},
+                {"created_at": {"$exists": False}},
+                {"author_id": {"$exists": False}}
+            ]
+        })
+        print(f"[DB] Cleaned up {result_tweets.deleted_count} non-compliant tweets")
+        
+        # Clean up written_ai_tweets collection
+        result_ai_tweets = db.written_ai_tweets.delete_many({
+            "$or": [
+                {"tweet_id": {"$exists": False}},
+                {"text": {"$exists": False}},
+                {"saved_at": {"$exists": False}}
+            ]
+        })
+        print(f"[DB] Cleaned up {result_ai_tweets.deleted_count} non-compliant AI tweets")
+        
+        # Clean up written_ai_tweets_replies collection
+        result_replies = db.written_ai_tweets_replies.delete_many({
+            "$or": [
+                {"tweet_id": {"$exists": False}},
+                {"reply": {"$exists": False}}
+            ]
+        })
+        print(f"[DB] Cleaned up {result_replies.deleted_count} non-compliant AI tweet replies")
+        
+        # Clean up ai_mention_tweets collection
+        result_mentions = db.ai_mention_tweets.delete_many({
+            "$or": [
+                {"tweet_id": {"$exists": False}},
+                {"replied_to": {"$exists": False}}
+            ]
+        })
+        print(f"[DB] Cleaned up {result_mentions.deleted_count} non-compliant mentions")
+        
+        print("[DB] Successfully cleaned up all collections!")
+        
     except Exception as e:
-        print(f"Error exporting to JSON: {e}")
+        print(f"[DB] Error during cleanup: {e}")
+        raise
 
-def print_collection_stats():
+def delete_existing_mentions(db):
+    """Delete all existing mentions and related data for safety"""
+    try:
+        # Delete all mentions
+        result_mentions = db.ai_mention_tweets.delete_many({})
+        print(f"[DB] Deleted {result_mentions.deleted_count} mentions")
+        
+        # Delete all tweets that are mentions or replies
+        result_tweets = db.tweets.delete_many({
+            "$or": [
+                {"in_reply_to_user_id": {"$exists": True}},
+                {"in_reply_to_tweet_id": {"$exists": True}},
+                {"replied_to": True}
+            ]
+        })
+        print(f"[DB] Deleted {result_tweets.deleted_count} related tweets")
+        
+        # Delete all written AI tweet replies
+        result_replies = db.written_ai_tweets_replies.delete_many({})
+        print(f"[DB] Deleted {result_replies.deleted_count} AI tweet replies")
+        
+        print("[DB] Successfully cleared all mentions and related data!")
+        
+    except Exception as e:
+        print(f"[DB] Error during mention deletion: {e}")
+        raise
+
+def print_collection_stats(db):
     """Print statistics about each collection"""
-    db = connect_to_mongodb()
     collections = db.list_collection_names()
     
     print("\nDatabase Statistics:")
@@ -88,99 +166,72 @@ def print_collection_stats():
                 formatted_sample = json.dumps(json.loads(json_util.dumps(sample)), indent=2)
                 print(formatted_sample)
                 
-                # Print field names for easier reference
                 fields = list(sample.keys())
                 print(f"\nFields: {', '.join(fields)}")
                 print("-" * 50)
         except Exception as e:
             print(f"Error analyzing {collection_name}: {e}")
 
-def cleanup_collections():
-    """Clean up collections to match the schema exactly using bulk operations"""
-    db = connect_to_mongodb()
-    
-    # Define allowed fields based on schemas
-    base_fields = {"tweet_id", "text", "created_at", "author_id"}
-    
-    tweet_fields = base_fields | {
-        "user", "user_id", "conversation_id", "in_reply_to_user_id", 
-        "in_reply_to_tweet_id", "likes", "replies", "retweets", "quotes",
-        "replied_to", "replied_at"
-    }
-    
-    written_ai_tweet_fields = base_fields | {
-        "saved_at", "edit_history_tweet_ids", "likes", "replies", 
-        "retweets", "quotes", "prompt", "model", "temperature", 
-        "max_tokens", "response_tweet_id"
-    }
-    
-    reply_fields = {
-        "reply_id", "text", "created_at", "author_id", "in_reply_to_tweet_id"
-    }
+def backup_database(db):
+    """Create a backup of the database before cleanup"""
+    export_dir = "exports"
+    os.makedirs(export_dir, exist_ok=True)
     
     try:
-        # Clean up tweets collection using bulk operations
-        bulk_tweets = db.tweets.initialize_unordered_bulk_op()
-        for doc in db.tweets.find():
-            cleaned_doc = {k: v for k, v in doc.items() if k in tweet_fields}
-            bulk_tweets.find({"_id": doc["_id"]}).replace_one(cleaned_doc)
-        bulk_tweets.execute()
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = os.path.join(export_dir, f"backup_before_cleanup_{timestamp}.json")
         
-        # Clean up written_ai_tweets collection using bulk operations
-        bulk_written_ai_tweets = db.written_ai_tweets.initialize_unordered_bulk_op()
-        for doc in db.written_ai_tweets.find():
-            cleaned_doc = {k: v for k, v in doc.items() if k in written_ai_tweet_fields}
-            bulk_written_ai_tweets.find({"_id": doc["_id"]}).replace_one(cleaned_doc)
-        bulk_written_ai_tweets.execute()
+        all_data = {}
+        for collection in db.list_collection_names():
+            all_data[collection] = json.loads(json_util.dumps(list(db[collection].find())))
         
-        # Clean up written_ai_tweets_replies collection using bulk operations
-        bulk_replies = db.written_ai_tweets_replies.initialize_unordered_bulk_op()
-        for doc in db.written_ai_tweets_replies.find():
-            cleaned_doc = {k: v for k, v in doc.items() if k in reply_fields}
-            bulk_replies.find({"_id": doc["_id"]}).replace_one(cleaned_doc)
-        bulk_replies.execute()
+        with open(filename, 'w') as f:
+            json.dump(all_data, f, indent=2)
         
-        print("Successfully cleaned up collections to match schema!")
-        
+        print(f"[DB] Backup created at: {filename}")
+        return filename
     except Exception as e:
-        print(f"Error during cleanup: {e}")
+        print(f"[DB] Error creating backup: {e}")
+        raise
 
-def backup_and_cleanup():
-    """Backup data, cleanup, and export final state"""
-    print("Starting database backup and cleanup...")
-    
+def clean_mentions():
     try:
-        # 1. First backup everything
-        print("\nCreating backup...")
-        export_dir = "exports"
-        os.makedirs(export_dir, exist_ok=True)
-        
-        backup_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        backup_filename = os.path.join(export_dir, f"backup_before_cleanup_{backup_timestamp}.json")
-        
-        data = get_all_collections_data()
-        with open(backup_filename, 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"Backup created at: {backup_filename}")
-        
-        # 2. Perform cleanup
-        print("\nPerforming cleanup...")
-        cleanup_collections()
-        
-        # 3. Export final state
-        print("\nExporting final state...")
-        final_filename = os.path.join(export_dir, f"final_state_{backup_timestamp}.json")
-        data = get_all_collections_data()
-        with open(final_filename, 'w') as f:
-            json.dump(data, f, indent=2)
-        print(f"Final state exported to: {final_filename}")
-        
-        print("\nOperation completed successfully!")
-        return True
-        
+        with get_db() as db:
+            # Drop the entire mentions collection
+            
+            # Or alternatively, remove just the empty mentions:
+            result = db.ai_mention_tweets.delete_many({"text": {"$exists": False}})
+            print(f"Removed {result.deleted_count} empty mentions")
+            
     except Exception as e:
-        print(f"\nOperation failed: {e}")
-        return False
+        print(f"Error cleaning mentions: {str(e)}")
 
 if __name__ == "__main__":
-    backup_and_cleanup()
+    try:
+        print("[ADMIN MODE] Starting database cleanup operation...")
+        
+        with MongoDBConnection() as db:
+            # Create backup first
+            backup_file = backup_database(db)
+            print(f"Backup created successfully at: {backup_file}")
+            
+            # Print initial stats
+            print("\nInitial database state:")
+            print_collection_stats(db)
+            
+            # Commenting out the deletion of mentions for safety
+            # print("\nDeleting existing mentions and related data...")
+            # delete_existing_mentions(db)
+            
+            # Perform schema cleanup
+            print("\nPerforming schema cleanup...")
+            cleanup_collections(db)
+            
+            # Print final stats
+            print("\nFinal database state:")
+            print_collection_stats(db)
+            
+            print("\nOperation completed successfully!")
+        
+    except Exception as e:
+        print(f"Operation failed: {e}")
