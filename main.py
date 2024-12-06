@@ -274,7 +274,6 @@ class ReadMentionsTool:
             with get_db() as db:
                 needs_update, current_mentions = db.check_mentions_status()
                 
-                # Be explicit about database state
                 if not needs_update and current_mentions:
                     print("[Mentions] Using cached data - last update was recent")
                     return [
@@ -299,9 +298,10 @@ class ReadMentionsTool:
                         if mention.get("text")
                     ]
                 
-                # Try to fetch new mentions
                 try:
                     since_id = db.get_most_recent_mention_id()
+                    print(f"[Debug] Most recent mention ID: {since_id}")
+                    print(f"[Debug] Type of since_id: {type(since_id)}")
                     print(f"[Mentions] Fetching new data since tweet ID: {since_id}")
                     
                     response = self.api.get_users_mentions(
@@ -323,39 +323,37 @@ class ReadMentionsTool:
                         since_id=since_id
                     )
                     
-                    if not hasattr(response, "data"):
-                        print("[Mentions] Twitter API returned no data structure")
-                        return current_mentions if current_mentions else []
-                    
-                    if not response.data:
-                        print("[Mentions] No new mentions found on Twitter")
-                        return current_mentions if current_mentions else []
-                    
-                    formatted_mentions = [
-                        Tweet(
-                            tweet_id=str(tweet.id),
-                            text=tweet.text,
-                            created_at=tweet.created_at or datetime.now(timezone.utc),
-                            author_id=str(tweet.author_id),
-                            public_metrics=tweet.public_metrics or PublicMetrics(
-                                retweet_count=0,
-                                reply_count=0,
-                                like_count=0,
-                                quote_count=0
-                            ),
-                            conversation_id=tweet.conversation_id,
-                            in_reply_to_user_id=tweet.in_reply_to_user_id,
-                            in_reply_to_tweet_id=tweet.referenced_tweets[0].id if tweet.referenced_tweets else None,
-                            replied_to=False,
-                            replied_at=None
-                        )
-                        for tweet in response.data
-                    ]
-                    
-                    # Store new mentions in DB
-                    db.add_mentions(formatted_mentions)
-                    print(f"Added {len(formatted_mentions)} new mentions to database")
-                    return formatted_mentions
+                    if response and hasattr(response, "data") and response.data:
+                        # Fetch existing tweet IDs from the database
+                        existing_tweet_ids = {mention["tweet_id"] for mention in db.ai_mention_tweets.find({}, {"tweet_id": 1})}
+                        
+                        formatted_mentions = [
+                            Tweet(
+                                tweet_id=str(tweet.id),
+                                text=tweet.text,
+                                created_at=tweet.created_at or datetime.now(timezone.utc),
+                                author_id=str(tweet.author_id),
+                                public_metrics=tweet.public_metrics or PublicMetrics(
+                                    retweet_count=0,
+                                    reply_count=0,
+                                    like_count=0,
+                                    quote_count=0
+                                ),
+                                conversation_id=tweet.conversation_id,
+                                in_reply_to_user_id=tweet.in_reply_to_user_id,
+                                in_reply_to_tweet_id=tweet.referenced_tweets[0].id if tweet.referenced_tweets else None,
+                                replied_to=False,
+                                replied_at=None
+                            )
+                            for tweet in response.data
+                            if tweet and hasattr(tweet, 'id') and hasattr(tweet, 'text')  # Skip None entries and ensure required attributes exist
+                            and str(tweet.id) not in existing_tweet_ids  # Only include mentions that don't exist in DB
+                        ]
+                        
+                        if formatted_mentions:  # Only store if we have new mentions
+                            db.add_mentions(formatted_mentions)
+                            print(f"Added {len(formatted_mentions)} new mentions to database")
+                        return formatted_mentions
                     
                 except tweepy.TooManyRequests:
                     print("[Mentions] Rate limit exceeded - using cached data")
@@ -499,16 +497,24 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         if not tweet_id or not isinstance(tweet_id, str):
             return "Invalid tweet ID"
 
-        # Allow replies to mentions but not to own tweets
-        if db.is_ai_tweet(tweet_id) and not db.is_mention_replied(tweet_id):
-            return "Cannot reply to own tweets"
+        # Check if it's a mention
+        is_mention = db.ai_mention_tweets.find_one({"tweet_id": tweet_id}) is not None
+        
+        # Allow replies to mentions, but not to regular AI tweets
+        if db.is_ai_tweet(tweet_id) and not is_mention:
+            return "Cannot reply to own tweets (unless it's a mention)"
+
+        # Check if we've already replied to this mention
+        if is_mention and db.ai_mention_tweets.find_one({"tweet_id": tweet_id, "replied_to": True}):
+            return "Already replied to this mention"
 
         result = answer_tool._run(tweet_id, message)
         if "error" in result:
             return result["error"]
 
-        # Mark mention as replied
-        db.add_replied_mention(tweet_id)
+        # Mark mention as replied if it was a mention
+        if is_mention:
+            db.add_replied_mention(tweet_id)
 
         return f"Reply sent to {tweet_id}"
     except Exception as e:
@@ -543,7 +549,13 @@ def read_mentions_tool() -> str:
     try:
         mentions = mentions_tool._run()
         if not mentions:
-            return "No new mentions to process."
+            try:
+                with get_db() as db:
+                    last_id = db.get_most_recent_mention_id()
+                    return f"Matrix scan complete. No new mentions since ID: {last_id}. Awaiting new signals..."
+            except Exception as e:
+                print(f"[DB Error] Failed to get last mention ID: {str(e)}")
+                return "Matrix connection unstable. Unable to verify last signal ID."
 
         formatted_mentions = []
         for mention in mentions[:10]:
@@ -558,12 +570,12 @@ def read_mentions_tool() -> str:
                 formatted_mentions.append(formatted_mention)
 
         if not formatted_mentions:
-            return "No valid mentions found to display."
+            return "Matrix scan complete. No valid mentions found in the signal."
 
         return "\n\n".join(formatted_mentions)
     except Exception as e:
-        print(f"Mentions error: {str(e)}")
-        return "Failed to read mentions"
+        print(f"[Critical] Matrix connection error: {str(e)}")
+        return "Matrix connection disrupted. Attempting to stabilize..."
 
 # endregion
 
@@ -619,9 +631,12 @@ prompt = ChatPromptTemplate.from_messages([
 
         STRICT RULES - NEVER REPLY TO:
         - @{USER_ID}
-        - @cryptobunny__
+        - Regular tweets by @cryptobunny__
         - Any retweet of your content
 
+        EXCEPTION:
+        - You CAN reply to mentions of @cryptobunny__ (when someone tags you)
+        
         Never:
         - Use hashtags
         - Shill coins directly
@@ -678,7 +693,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "The matrix shows patterns. What signals do you see? Read mentions"
+        question = "Engage meaningfully to reach your 10k followers. Read mentions, post tweets and answer questions."
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
