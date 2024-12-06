@@ -479,20 +479,29 @@ class TweetDB:
     def is_ai_tweet(self, tweet_id: str) -> bool:
         """Check if a tweet was created by the AI"""
         try:
-            # Check in written_ai_tweets collection
+            # First check if it's a mention (mentions should be treated as non-AI tweets)
+            mention = self.ai_mention_tweets.find_one({"tweet_id": tweet_id})
+            if mention:
+                print(f"[DB] Tweet {tweet_id} is a mention")
+                return False
+
+            # Then check if it's our tweet
             ai_tweet = self.written_ai_tweets.find_one({"tweet_id": tweet_id})
             if ai_tweet:
+                print(f"[DB] Tweet {tweet_id} is an AI tweet")
                 return True
 
-            # Check if it's a reply to the AI's own tweet
+            # Finally check if it's our reply
             ai_reply = self.written_ai_tweets_replies.find_one({"tweet_id": tweet_id})
             if ai_reply:
+                print(f"[DB] Tweet {tweet_id} is an AI reply")
                 return True
 
+            print(f"[DB] Tweet {tweet_id} is not from AI")
             return False
 
         except Exception as e:
-            print(f"Error checking if tweet is from AI: {e}")
+            print(f"[DB] Error checking if tweet is from AI: {str(e)}")
             return False
 
     def add_replied_mention(self, tweet_id: str) -> bool:
