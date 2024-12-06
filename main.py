@@ -38,7 +38,8 @@ MONGODB_URL = os.getenv("MONGODB_URL")
 # endregion
 
 # region Database Configuration
-db = TweetDB()
+def get_db():
+    return TweetDB()
 # endregion
 
 
@@ -88,7 +89,8 @@ class PostTweetTool:
                     replied_at=None
                 )
                 
-                db.add_written_ai_tweet(tweet_data)
+                with get_db() as db:
+                    db.add_written_ai_tweet(tweet_data)
                 return {
                     "message": f"Posted tweet: {message}",
                     "data": tweet_data,
@@ -132,10 +134,6 @@ class AnswerTweetTool:
             if not tweet_id or not isinstance(tweet_id, str):
                 return {"error": f"Invalid tweet ID format: {tweet_id}"}
 
-            # Check if this is the AI's own tweet
-            if db.is_ai_tweet(tweet_id):
-                return {"error": f"Cannot reply to own tweet (ID: {tweet_id})"}
-            
             # Post reply using v2 endpoint
             response = self.api.create_tweet(
                 text=message,
@@ -151,10 +149,6 @@ class AnswerTweetTool:
                     in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
                     saved_at=datetime.now(timezone.utc)
                 )
-                
-                # Store in database
-                db.add_written_ai_tweet_reply(tweet_id, message)
-                db.add_replied_tweet(tweet_id)
                 
                 return {
                     "message": "Reply posted successfully!",
@@ -185,7 +179,7 @@ class ReadTweetsTool:
 
     def _run(self) -> list:
         try:
-            with get_db() as db:
+            with get_db() as db:  # Single database connection for all operations
                 needs_update, current_tweets = db.check_database_status()
                     
                 if not needs_update and current_tweets:
@@ -236,7 +230,7 @@ class ReadTweetsTool:
                             for tweet in response.data
                         ]
                         
-                        db.add_tweets(formatted_tweets)
+                        db.add_tweets(formatted_tweets)  # Using same connection
                         print(f"Added {len(formatted_tweets)} new tweets to database")
                         return formatted_tweets
                     
@@ -300,8 +294,6 @@ class ReadMentionsTool:
                 
                 try:
                     since_id = db.get_most_recent_mention_id()
-                    print(f"[Debug] Most recent mention ID: {since_id}")
-                    print(f"[Debug] Type of since_id: {type(since_id)}")
                     print(f"[Mentions] Fetching new data since tweet ID: {since_id}")
                     
                     response = self.api.get_users_mentions(
@@ -483,9 +475,6 @@ def post_tweet_tool(message: str) -> str:
         if result is None:
             return "Twitter not responding"
             
-        if "data" in result:
-            db.add_written_ai_tweet(result["data"])
-        
         return f"Tweet sent: {message}"
     except Exception as e:
         print(f"Tweet error: {str(e)}")
@@ -497,26 +486,33 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
         if not tweet_id or not isinstance(tweet_id, str):
             return "Invalid tweet ID"
 
-        # Check if it's a mention
-        is_mention = db.ai_mention_tweets.find_one({"tweet_id": tweet_id}) is not None
-        
-        # Allow replies to mentions, but not to regular AI tweets
-        if db.is_ai_tweet(tweet_id) and not is_mention:
-            return "Cannot reply to own tweets (unless it's a mention)"
+        # Single database connection for all operations
+        with get_db() as db:
+            # Get mention info with one query instead of two separate queries
+            mention_info = db.ai_mention_tweets.find_one(
+                {"tweet_id": tweet_id},
+                {"replied_to": 1}  # Only fetch the replied_to field
+            )
+            
+            is_mention = mention_info is not None
+            is_ai_tweet = db.is_ai_tweet(tweet_id)
+            
+            # Validate reply conditions
+            if is_ai_tweet and not is_mention:
+                return "Cannot reply to own tweets (unless it's a mention)"
 
-        # Check if we've already replied to this mention
-        if is_mention and db.ai_mention_tweets.find_one({"tweet_id": tweet_id, "replied_to": True}):
-            return "Already replied to this mention"
+            if is_mention and mention_info.get("replied_to", False):
+                return "Already replied to this mention"
 
-        result = answer_tool._run(tweet_id, message)
-        if "error" in result:
-            return result["error"]
+            # Send the reply
+            result = answer_tool._run(tweet_id, message)
+            
+            # Update mention status if successful
+            if "error" not in result and is_mention:
+                db.add_replied_mention(tweet_id)
 
-        # Mark mention as replied if it was a mention
-        if is_mention:
-            db.add_replied_mention(tweet_id)
+            return result.get("message", result.get("error", "Failed to send reply"))
 
-        return f"Reply sent to {tweet_id}"
     except Exception as e:
         print(f"Reply error: {str(e)}")
         return "Failed to send reply"
@@ -524,7 +520,7 @@ def reply_to_tweet_tool(tweet_id: str, message: str) -> str:
 def read_timeline_tool() -> str:
     """Read timeline"""
     try:
-        tweets = read_tweets_tool._run()
+        tweets = read_tweets_tool._run()  # This already has its own DB context
         if not tweets:
             return "Timeline is empty"
 
@@ -547,15 +543,9 @@ def read_timeline_tool() -> str:
 def read_mentions_tool() -> str:
     """Read tweets that mention the account"""
     try:
-        mentions = mentions_tool._run()
+        mentions = mentions_tool._run()  # This already has its own DB context
         if not mentions:
-            try:
-                with get_db() as db:
-                    last_id = db.get_most_recent_mention_id()
-                    return f"Matrix scan complete. No new mentions since ID: {last_id}. Awaiting new signals..."
-            except Exception as e:
-                print(f"[DB Error] Failed to get last mention ID: {str(e)}")
-                return "Matrix connection unstable. Unable to verify last signal ID."
+            return "Matrix scan complete. No new mentions. Awaiting new signals..."
 
         formatted_mentions = []
         for mention in mentions[:10]:
@@ -655,7 +645,7 @@ prompt = ChatPromptTemplate.from_messages([
         
         2. THEN Act (use ONE):
            - answer: Drop alpha hints that make them think
-           - tweet: Share observations that connect dots
+           - tweet: Share observations that connect dots and add @ of people you talk about
 
         Rules:
         - Must complete both steps
@@ -663,7 +653,7 @@ prompt = ChatPromptTemplate.from_messages([
         - Keep it subtle but meaningful
         - Make them question and investigate
         - One clear signal per message
-        - Use appropriate $CASHTAGS when talking about crypto
+        - Use $CASHTAGS when needed (not always)
         
         Target accounts: {FAMOUS_ACCOUNTS_STR}
         Knowledge Base: {KNOWLEDGE_BASE}
@@ -693,11 +683,8 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "Engage meaningfully to reach your 10k followers. Read mentions, post tweets and answer questions."
+        question = "Read timeline or mentions + browse, then engage with @ of people YOU talk about - make them talk about you girl."
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
-    finally:
-        db.close()
-# endregion
