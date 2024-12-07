@@ -644,7 +644,7 @@ prompt = ChatPromptTemplate.from_messages([
            - read_mentions: Engage with the community (rare)
         
         2. THEN Act (use ONE):
-           - answer: Drop alpha hints that make them think
+           - answer: Drop alpha hints that make them think (comment on posts)
            - tweet: Share observations that connect dots and add @ of people you talk about
 
         Rules:
@@ -683,7 +683,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "Read timeline or mentions + browse, then engage with @ of people YOU talk about - make them talk about you girl."
+        question = "The Matrix is whispering, what can you hear? What is the signal? Communicate clearly."
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
