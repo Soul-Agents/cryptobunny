@@ -11,7 +11,7 @@ from langchain_core.prompts import PromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone
-#from langchain.tools.retriever import create_retriever_tool
+from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
 from db_utils import get_db
@@ -620,44 +620,44 @@ def read_mentions_tool() -> str:
         print(f"[Critical] Matrix connection error: {str(e)}")
         return "Matrix connection disrupted. Attempting to stabilize..."
 
-def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str) -> str:
-    """Search for relevant context and reply to a tweet using that context."""
-    try:
-        # Use the tweet text to search for relevant context
-        relevant_docs = retriever.invoke(tweet_text)
+# def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str) -> str:
+#     """Search for relevant context and reply to a tweet using that context."""
+#     try:
+#         # Use the tweet text to search for relevant context
+#         relevant_docs = retriever.invoke(tweet_text)
 
-        print("\n=== Retrieved Documents ===")
-        for i, doc in enumerate(relevant_docs):
-            print(f"Document {i + 1}:")
-            print(doc.page_content)
-            print("---")
+#         print("\n=== Retrieved Documents ===")
+#         for i, doc in enumerate(relevant_docs):
+#             print(f"Document {i + 1}:")
+#             print(doc.page_content)
+#             print("---")
         
-        # Extract context from the retrieved documents
-        context = "\n".join([doc.page_content for doc in relevant_docs]) if relevant_docs else ""
-        print("\n=== Assembled Context ===")
-        print(context)
-        print("---")
+#         # Extract context from the retrieved documents
+#         context = "\n".join([doc.page_content for doc in relevant_docs]) if relevant_docs else ""
+#         print("\n=== Assembled Context ===")
+#         print(context)
+#         print("---")
 
-        # Enhance the tweet_text with context
-        enhanced_tweet_text = f"""
-                        This is Original Tweet you should reply to: {tweet_text}
+#         # Enhance the tweet_text with context
+#         enhanced_tweet_text = f"""
+#                         This is Original Tweet you should reply to: {tweet_text}
 
-                        This is context, use it only if it is relevant to the tweet.
-                        {context}
-                        """
-        print("\n=== Enhanced Tweet Text ===")
-        print(enhanced_tweet_text)
-        print("---")
+#                         This is context, use it only if it is relevant to the tweet.
+#                         {context}
+#                         """
+#         print("\n=== Enhanced Tweet Text ===")
+#         print(enhanced_tweet_text)
+#         print("---")
         
-        # Use the existing answer tool to post the reply
-        result = answer_tool._run(tweet_id=tweet_id, tweet_text=enhanced_tweet_text, message=message)
+#         # Use the existing answer tool to post the reply
+#         result = answer_tool._run(tweet_id=tweet_id, tweet_text=enhanced_tweet_text, message=message)
         
-        if "error" in result:
-            return result["error"]
+#         if "error" in result:
+#             return result["error"]
             
-        return result.get("message", "Reply sent successfully")
-    except Exception as e:
-        return f"An error occurred replying to tweet with context: {str(e)}"
+#         return result.get("message", "Reply sent successfully")
+#     except Exception as e:
+#         return f"An error occurred replying to tweet with context: {str(e)}"
 
 
 # endregion
@@ -693,21 +693,24 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
     description="Monitor mentions to engage with the community.",
 )
 
-answer_with_context_tool_wrapped = StructuredTool.from_function(
-    func=answer_tweet_with_context_tool,
-    name="answer_tweets_with_context",
-    description="First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
-)
-
-#tweet_prompt = PromptTemplate.from_template("Here is a tweet about {text}")
-#tweet_prompt.invoke({"text": "{tweet_text}"})
-
-#answer_with_context_tool_wrapped = create_retriever_tool(
-#    retriever,
-#    "answer_tweets_with_context",
-#    "First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
-#       document_prompt=tweet_prompt
+#answer_with_context_tool_wrapped = StructuredTool.from_function(
+#    func=answer_tweet_with_context_tool,   
+#    name="answer_tweets_with_context",
+#    description="First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
 #)
+
+#tweet promp zostawiam to na pozniej
+#tweet_prompt = PromptTemplate.from_template("Here is a tweet about {page_content}")
+#print(tweet_prompt.invoke({"page_content": ""}))
+#print(tweet_prompt)
+
+
+answer_with_context_tool_wrapped = create_retriever_tool(
+    retriever,
+    "answer_tweets_with_context",
+    "First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own. Choose always different tweet",
+    #document_prompt=tweet_prompt, zostawiam to na pozniej
+)
 
 tools = [
     browse_internet,
@@ -757,7 +760,7 @@ prompt = ChatPromptTemplate.from_messages(
         
         2. THEN Act (use ONE):
            - answer: Drop alpha hints that make them think (comment on posts)
-           - answer_with_context: Reply using knowledge from our database for deeper insights
+           - answer_with_context: Reply using knowledge from our database for deeper insights, and then use post_tool to post your answer
            - tweet: Share observations that connect dots and add @ of people you talk about
 
         Rules:
