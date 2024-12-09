@@ -7,6 +7,11 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain_pinecone import PineconeVectorStore
+from langchain_openai import OpenAIEmbeddings
+from pinecone import Pinecone
+#from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
 from db_utils import get_db
@@ -21,6 +26,7 @@ load_dotenv()
 
 # region Environment Configuration
 API_KEY = os.getenv("API_KEY")
+PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 API_SECRET_KEY = os.getenv("API_SECRET_KEY")
 BEARER_TOKEN = os.getenv("BEARER_TOKEN")
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
@@ -41,7 +47,7 @@ def get_db():
 # endregion
 
 
-# region LLM Configuration
+# region LLM Configuration and embeddings
 llm = ChatOpenAI(
     model="gpt-4o",
     temperature=1,
@@ -49,9 +55,26 @@ llm = ChatOpenAI(
     api_key=API_KEY_OPENAI,
     presence_penalty=0.8,
 )
+
+embeddings = OpenAIEmbeddings(
+    model="text-embedding-3-large",
+    api_key=API_KEY_OPENAI)
 # endregion
 
+#region Pinecone Configuration
+pc = Pinecone(api_key=PINECONE_API_KEY)
+index = pc.Index("soulsagent")
+#endregion
 
+#region INIT Pinecone vector db
+docsearch = PineconeVectorStore(
+    index=index,
+    embedding=embeddings,
+)
+retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
+#endregion
+
+# region Twitter Service Classes
 class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Use this tool to post a new tweet to the timeline."
@@ -480,7 +503,7 @@ except Exception as e:
     raise  # Re-raise the exception since we can't continue without tools
 # endregion
 
-
+# region Tavily Tool Function
 def browse_internet(query: str) -> str:
     """Search the internet"""
     if not query:
@@ -495,8 +518,9 @@ def browse_internet(query: str) -> str:
         print(f"[Search] Failed: {str(e)}")  # Keeping error logging
         return "Search failed"
 
+# endregion
 
-# region Tool Functions
+# region Twitter Tool Functions
 def post_tweet_tool(message: str) -> str:
     """Post a tweet"""
     if not message or len(message.strip()) == 0:
@@ -596,6 +620,45 @@ def read_mentions_tool() -> str:
         print(f"[Critical] Matrix connection error: {str(e)}")
         return "Matrix connection disrupted. Attempting to stabilize..."
 
+def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str) -> str:
+    """Search for relevant context and reply to a tweet using that context."""
+    try:
+        # Use the tweet text to search for relevant context
+        relevant_docs = retriever.invoke(tweet_text)
+
+        print("\n=== Retrieved Documents ===")
+        for i, doc in enumerate(relevant_docs):
+            print(f"Document {i + 1}:")
+            print(doc.page_content)
+            print("---")
+        
+        # Extract context from the retrieved documents
+        context = "\n".join([doc.page_content for doc in relevant_docs]) if relevant_docs else ""
+        print("\n=== Assembled Context ===")
+        print(context)
+        print("---")
+
+        # Enhance the tweet_text with context
+        enhanced_tweet_text = f"""
+                        This is Original Tweet you should reply to: {tweet_text}
+
+                        This is context, use it only if it is relevant to the tweet.
+                        {context}
+                        """
+        print("\n=== Enhanced Tweet Text ===")
+        print(enhanced_tweet_text)
+        print("---")
+        
+        # Use the existing answer tool to post the reply
+        result = answer_tool._run(tweet_id=tweet_id, tweet_text=enhanced_tweet_text, message=message)
+        
+        if "error" in result:
+            return result["error"]
+            
+        return result.get("message", "Reply sent successfully")
+    except Exception as e:
+        return f"An error occurred replying to tweet with context: {str(e)}"
+
 
 # endregion
 
@@ -630,10 +693,27 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
     description="Monitor mentions to engage with the community.",
 )
 
+answer_with_context_tool_wrapped = StructuredTool.from_function(
+    func=answer_tweet_with_context_tool,
+    name="answer_tweets_with_context",
+    description="First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
+)
+
+#tweet_prompt = PromptTemplate.from_template("Here is a tweet about {text}")
+#tweet_prompt.invoke({"text": "{tweet_text}"})
+
+#answer_with_context_tool_wrapped = create_retriever_tool(
+#    retriever,
+#    "answer_tweets_with_context",
+#    "First come up with your answear, then searches relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
+#       document_prompt=tweet_prompt
+#)
+
 tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
+    answer_with_context_tool_wrapped,
     read_tweets_tool_wrapped,
     read_mentions_tool_wrapped,
 ]
@@ -641,6 +721,7 @@ tools = [
 
 # region Agent Configuration
 current_date = datetime.now().strftime("%B %Y")
+
 
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -676,6 +757,7 @@ prompt = ChatPromptTemplate.from_messages(
         
         2. THEN Act (use ONE):
            - answer: Drop alpha hints that make them think (comment on posts)
+           - answer_with_context: Reply using knowledge from our database for deeper insights
            - tweet: Share observations that connect dots and add @ of people you talk about
 
         Rules:
@@ -713,7 +795,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "The Matrix is whispering, what can you hear? What is the signal? Communicate clearly."
+        question = "The Matrix is whispering, what can you hear? What is the signal? Use answer with context."
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:
