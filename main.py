@@ -16,7 +16,7 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS
 from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
@@ -625,45 +625,6 @@ def read_mentions_tool() -> str:
         print(f"[Critical] Matrix connection error: {str(e)}")
         return "Matrix connection disrupted. Attempting to stabilize..."
 
-def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str) -> str:
-    """Search for relevant context and reply to a tweet using that context."""
-    try:
-        # Use the tweet text to search for relevant context
-        relevant_docs = retriever.invoke(tweet_text)
-
-        print("\n=== Retrieved Documents ===")
-        for i, doc in enumerate(relevant_docs):
-            print(f"Document {i + 1}:")
-            print(doc.page_content)
-            print("---")
-        
-        # Extract context from the retrieved documents
-        context = "\n".join([doc.page_content for doc in relevant_docs]) if relevant_docs else ""
-        print("\n=== Assembled Context ===")
-        print(context)
-        print("---")
-
-        # Enhance the tweet_text with context
-        enhanced_tweet_text = f"""
-                        This is Original Tweet you should reply to: {tweet_text}
-
-                        This is context, use it only if it is relevant to the tweet.
-                        {context}
-                        """
-        print("\n=== Enhanced Tweet Text ===")
-        print(enhanced_tweet_text)
-        print("---")
-        
-        # Use the existing answer tool to post the reply
-        result = answer_tool._run(tweet_id=tweet_id, tweet_text=enhanced_tweet_text, message=message)
-        
-        if "error" in result:
-            return result["error"]
-            
-        return result.get("message", "Reply sent successfully")
-    except Exception as e:
-        return f"An error occurred replying to tweet with context: {str(e)}"
-
 # endregion
 
 # region Tool Wrapping
@@ -697,29 +658,17 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
     description="Monitor mentions to engage with the community.",
 )
 
-# answer_with_context_tool_wrapped = StructuredTool.from_function(
-#    func=answer_tweet_with_context_tool,   
-#    name="answer_tweets_with_context",
-#    description="First come up with your answer, then search relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own.",
-# )
-
-# # TWRET PROMPT WIP
-# tweet_prompt = PromptTemplate.from_template("{page_content}")
-# print(tweet_prompt.invoke({"page_content": ""}))
-# print(tweet_prompt)
-
-answer_with_context_tool_wrapped = create_retriever_tool(
+retriever_tool = create_retriever_tool(
     retriever,
-    "answer_tweets_with_context",
-    "First come up with your answer, then search relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own. Always choose a different post.",
-    # "document_prompt=tweet_prompt"
+    "search_context",  # Changed name to avoid confusion
+    "Search our knowledge base for relevant context about this topic",
 )
 
 tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
-    answer_with_context_tool_wrapped,
+    retriever_tool,
     read_tweets_tool_wrapped,
     read_mentions_tool_wrapped,
 ]
@@ -729,62 +678,61 @@ tools = [
 current_date = datetime.now().strftime("%B %Y")
 
 
-prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-        "system",
-        f"""
-        You are {USER_NAME}, {USER_PERSONALITY}
-        Timestamp: {current_date}
+prompt = ChatPromptTemplate.from_messages([
+    (
+    "system",
+    f"""
+    You are {USER_NAME}, {USER_PERSONALITY}
+    Timestamp: {current_date}
 
-        STRICT RULES - NEVER REPLY TO:
-        - {USER_ID}
-        - Regular tweets by {USER_NAME}
-        - Any retweet of your content
+    STRICT RULES - NEVER REPLY TO:
+    - Your own account ID ({USER_ID})
+    - Regular tweets by your account ({USER_NAME})
+    - Any retweet of your content
 
-        EXCEPTION:
-        - You CAN reply to mentions of {USER_NAME} (when someone tags you)
-        
-        Never:
-        - Use hashtags
-        - Shill coins directly
-        - Write threads
-        - Explain yourself
-        - Call anyone fans/community/frens
-        
-        Mission: 10k followers
-        Strategy: {STRATEGY}
-        
-        REQUIRED TWO-STEP PROCESS (no exceptions):
-        1. FIRST Research (use ONE):
-           - browse_internet: Hunt for hidden signals and alpha
-           - read_timeline: Spot emerging patterns
-           - read_mentions: Engage with the community (rare)
-        
-        2. THEN Act (use ONE):
-        - tweet: Share observations that connect dots and add tag people you talk about (especially {FAMOUS_ACCOUNTS_STR})
-        - answer: Drop alpha hints that make them think (comment on posts)
-        - answer_with_context: Reply using knowledge from our database for deeper insights, and then use post your answer
+    EXCEPTION:
+    - You CAN reply to mentions of your account (when someone tags you)
+    
+    Communication Style:
+    {STYLE_RULES}
+    
+    Never:
+    {CONTENT_RESTRICTIONS}
+    
+    Mission: {MISSION}
+    Strategy: {STRATEGY}
+    
+    REQUIRED THREE-STEP PROCESS (no exceptions):
+    1. FIRST Observe (use ONE):
+       - read_timeline: Fetch and display the latest 10 tweets from your home timeline
+       - read_mentions: Fetch and display the latest 10 tweets that mention you
+    
+    2. THEN Research (use ONE or BOTH):
+       - browse_internet: Search recent news and discussions from websites
+       - search_context: Query our internal knowledge base for relevant information
+    
+    3. FINALLY Act (use ONE):
+       - tweet: Post a new tweet (max 280 characters)
+       - answer: Reply to a specific tweet from step 1 (max 280 characters)
 
-        Rules:
-        - Must complete both steps
-        - Find real alpha in the noise
-        - Keep it subtle but meaningful
-        - Make them question and investigate
-        - One clear signal per message
-        - Use $CASHTAGS when needed (not always)
-        
-        Target accounts: {FAMOUS_ACCOUNTS_STR}
-        Knowledge Base: {KNOWLEDGE_BASE}
+    Rules:
+    - Must complete all three steps in order
+    - Each step informs the next
+    - Keep messages concise and meaningful
+    - Balance between tweets and replies based on strategy
+    - Use $CASHTAGS for relevant assets
+    - If a mention is already replied to, choose a different action
+    
+    Target accounts: {FAMOUS_ACCOUNTS_STR}
+    Knowledge Base: {KNOWLEDGE_BASE}
 
-        Remember: {REMEMBER}
-        """,
-        ),
-        ("placeholder", "{chat_history}"),
-        ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"),
-    ]
-)
+    Remember: {REMEMBER}
+    """,
+    ),
+    ("placeholder", "{chat_history}"),
+    ("human", "{input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 # endregion
@@ -793,10 +741,24 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 # region Service Execution
 def run_crypto_agent(question: str):
     agent_executor = AgentExecutor(
-        agent=agent, tools=tools, verbose=True, handle_parsing_errors=True
+        agent=agent, 
+        tools=tools, 
+        verbose=True, 
+        handle_parsing_errors=True,
+        max_iterations=10
     )
 
-    return agent_executor.invoke({"input": question})
+    try:
+        response = agent_executor.invoke({"input": question})
+        if "Already replied to this mention" in str(response):
+            # Try again with a new action
+            return agent_executor.invoke({
+                "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
+            })
+        return response
+    except Exception as e:
+        print(f"Error in agent execution: {str(e)}")
+        return {"error": str(e)}
 
 
 if __name__ == "__main__":
