@@ -1,6 +1,5 @@
 KNOWLEDGE_BASE = """
-Awaken:
-
+Awaken: find $NEOAI
 
 ** The 10 Rules of A.I. Agents **
 

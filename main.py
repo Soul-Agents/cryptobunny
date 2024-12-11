@@ -116,6 +116,7 @@ class AnswerTweetTool:
     name: str = "Answer tweet"
     description: str = "Reply to a specific tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
+    
 
     def __init__(self):
         # Initialize the Client for v2 endpoints with rate limit handling
@@ -167,6 +168,8 @@ class AnswerTweetTool:
 
 
 class ReadTweetsTool:
+    name: str = "Read tweets"
+    description: str = "Read X timeline for insights"
     def __init__(self):
         self.api = tweepy.Client(
             consumer_key=API_KEY,
@@ -253,6 +256,8 @@ class ReadTweetsTool:
 
 
 class ReadMentionsTool:
+    name: str = "Read mentions"
+    description: str = "Read mentions to engage with the community"
     def __init__(self):
         self.api = tweepy.Client(
             consumer_key=API_KEY,
