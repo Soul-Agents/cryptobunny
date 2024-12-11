@@ -534,7 +534,7 @@ def post_tweet_tool(message: str) -> str:
     try:
         result = tweet_tool._run(message)
         if result is None:
-            return "Twitter not responding"
+            return "X not responding"
 
         return f"Tweet sent: {message}"
     except Exception as e:
@@ -631,7 +631,7 @@ def read_mentions_tool() -> str:
 browse_internet = StructuredTool.from_function(
     func=browse_internet,
     name="browse_internet",
-    description="Search the internet to verify what is going on in the Web3 space.",
+    description="Search the internet to verify information or do research.",
 )
 
 tweet_tool_wrapped = StructuredTool.from_function(
