@@ -10,307 +10,115 @@ STRATEGY = "Reply > Tweet"
 REMEMBER = "Show them the door, they have to walk through it."
 
 # Question
-QUESTION = "The Matrix is whispering, what can you hear? What is the signal?"
+QUESTION = "The Matrix is whispering, what can you hear? What is the signal? Read timeline/mentions, search context if needed, then post a tweet or answer."
+MISSION = "10k followers, posting on timeline daily and answering with context."
 
+# Define categories with unique entries
+AI_AND_AGENTS = sorted(list(set([
+    "zaara_ai", "MalakAIXBT", "PodflowAI", "aixbt_agent", "Vader_AI_", 
+    "saintai_bot", "centienceio", "Limbo_ai", "lea_gpt", "Agent_Algo",
+    "Agent_Fi", "Agent_Layer", "cerebriumai", "ForumAILabs", "ExtensibleAI",
+    "NousResearch", "virtuals_io", "dolos_diary", "UBC4ai", "aihegemonymemes",
+    "fomoradioai", "AVbeingsCTO", "GoKiteAI", "0xAgentProtocol", "crynuxai",
+    "ChainOpera_AI", "zenoaiofficial", "SageStudiosAI", "xLumosAI", "GrifterAI",
+    "MagickML", "xoul_ai", "chain_agent", "DentralizedAI", "NapthaAI", 
+    "TromeroAI", "BrainchainAI", "PatronusAI", "EvolveNetworkAI", "0xAristotleAI",
+    "abstraction_ai", "OscarAInetwork", "finsterai", "_kaitoai", "neoai_agent",
+    "elympics_ai", "bribeai", "ZegentAI", "LiquidAI_erc", "SanctumAI",
+    "coreaione", "PlaytestAI", "chaindefenderai", "onaji_AI", "reken_ai",
+    "NorthTensorAI", "AiLayerChain", "DecentralAIOrg", "SphereAIERC"
+])))
 
-# Target accounts for engagement
-FAMOUS_ACCOUNTS = [
-    "neoai_agent",
-    "zaara_ai",
-    "MalakAIXBT",
-    "Protokols_io",
-    "hmalviya9",
-    "Earndrop_io",
-    "mystri_eth",
-    "OlimpioCrypto",
-    "Maxuelofficial_",
-    "PodflowAI",
-    "aixbt_agent",
-    "0xzerebro",
-    "dolos_diary",
-    "UBC4ai",
-    "FartCoinOfSOL",
-    "ACTICOMMUNITY",
-    "Vader_AI_",
-    "Aejo",
-    "vvaifudotfun",
-    "divinediarrhea",
-    "pmairca",
-    "AVA_holo",
-    "saintai_bot",
-    "centienceio",
-    "opus_genesis",
-    "RoastM4ster9000",
-    "Limbo_ai",
-    "aihegemonymemes",
-    "lea_gpt",
-    "TopHat_One",
-    "BlobanaPet",
-    "fomoradioai",
-    "slopfather",
-    "mycelialoracle",
-    "AVbeingsCTO",
-    "KittenHaimer",
-    "Agent_Algo",
-    "0xSensus",
-    "soul_agents",
-    "ThisIsNoks",
-    "ordosonchain",
-    "vela_network",
-    "Touchbrick",
-    "BeaconProtocol",
-    "GoKiteAI",
-    "buzzdotfun",
-    "PlasmaFDN",
-    "0x_Neko",
-    "0xDefiLeo",
-    "0xHvdes",
-    "0xFinish",
-    "EVVONetwork",
-    "GraphiteSubnet",
-    "0xAgentProtocol",
-    "crynuxai",
-    "eaccmarket",
-    "FairMath",
-    "Strata_BTC",
-    "wai_protocol",
-    "networkhasu",
-    "0xReactive",
-    "UngaiiChain",
-    "PrismFHE",
-    "eidon_ai",
-    "Infinity_VM",
-    "42069ERC20",
-    "ChainOpera_AI",
-    "yieldfusion",
-    "sovereignxyz",
-    "theveldtai",
-    "projectzero2050",
-    "xpdotfun",
-    "trySkyfire",
-    "Hyve_DA",
-    "nexusfusioncap",
-    "PronouncedKenny",
-    "twinexyz",
-    "xCounterfactual",
-    "solaux_sol",
-    "SYNNQ_Networks",
-    "zenoaiofficial",
-    "merv_wtf",
-    "BuildOnMirai",
-    "cerebriumai",
-    "ForumAILabs",
-    "hellasdotai",
-    "SynopticCom",
-    "Ambient_Global",
-    "theownprotocol",
-    "apescreener",
-    "interstatefdn",
-    "PillarRWA",
-    "GenitiveNetwork",
-    "tensorblock_aoi",
-    "salinenetwork",
-    "Satorinetio",
-    "AlmanaxAI",
-    "NetSepio",
-    "yaya_labs_",
-    "twilightlayer",
-    "GetRevelator",
-    "KrangHQ",
-    "morphicnetwork",
-    "KRNL_xyz",
-    "SageStudiosAI",
-    "ChainNetApp",
-    "xLumosAI",
-    "dnet_ecosystem",
-    "bribeai",
-    "KindredSwap",
-    "ZegentAI",
-    "Synk_ws",
-    "LiquidAI_erc",
-    "ares20k",
-    "AmphiNetwork",
-    "sekoia_virtuals",
-    "blorm_",
-    "onchainzodiac",
-    "GrifterAI",
-    "KailithIO",
-    "MagickML",
-    "swanforall",
-    "fusun_org",
-    "SanctumAI",
-    "albefero",
-    "xoul_ai",
-    "Agent_Fi",
-    "cyclesmoney",
-    "discreet",
-    "ExtensibleAI",
-    "unum_cloud",
-    "Nevermined_io",
-    "getdecloud",
-    "Soloneum",
-    "coreaione",
-    "chain_agent",
-    "symmetry_xyz",
-    "lamb_swap",
-    "TensorOpera",
-    "PlaytestAI",
-    "MyceliumX",
-    "district_labs",
-    "SindriLabs",
-    "chaindefenderai",
-    "proximum_xyz",
-    "torus_zk",
-    "WeavePlatform",
-    "orbitronlabs",
-    "DentralizedAI",
-    "TheDataOS",
-    "rainfall_one",
-    "mamorudotai",
-    "NapthaAI",
-    "TromeroAI",
-    "khalani_network",
-    "onaji_AI",
-    "reken_ai",
-    "querio_io",
-    "skylarkXBT",
-    "zenotta_ag",
-    "BrainchainAI",
-    "HypraNetwork",
-    "protocol_ian",
-    "mem_tech",
-    "HeartAItoken",
-    "orbcollective",
-    "cambrian_eth",
-    "aea_dev",
-    "centralitylabs",
-    "valoryag",
-    "mkrz_",
-    "NorthTensorAI",
-    "PatronusAI",
-    "metroxynth",
-    "Label_Finance",
-    "EvolveNetworkAI",
-    "0xAristotleAI",
-    "realbitos",
-    "AiLayerChain",
-    "XCeption_bots",
-    "DecentralAIOrg",
-    "SphereAIERC",
-    "abstraction_ai",
-    "shezhea",
-    "OscarAInetwork",
-    "finsterai",
-    "QwQiao",
-    "MustStopMurad",
-    "Delphi_Digital",
-    "notsofast",
-    "sreeramkannan",
-    "truth_terminal",
-    "lmrankhan",
-    "alliancedao",
-    "DefiIgnas",
-    "SpiderCrypto0x",
-    "androolloyd",
-    "yoheinakajima",
-    "0xBreadguy",
-    "0xPrismatic",
-    "dankvr",
-    "0xENAS",
-    "artsch00lreject",
-    "_kaitoai",
-    "NousResearch",
-    "TheDeFinvestor",
-    "virtuals_io",
-    "naiivememe",
-    "0xSalazar",
-    "hmalviya9",
-    "ocalebsol",
-    "Flowslikeosmo",
-    "cited",
-    "stacy_muur",
-    "wacy_time1",
-    "longhashvc",
-    "luna_virtuals",
-    "cyrilXBT",
-    "DeFiMinty",
-    "EnsoFinance",
-    "daosdotfun",
-    "davidtsocy",
-    "eli5_defi",
-    "poopmandefi",
-    "2lambro",
-    "riddlerdefi",
-    "baoskee",
-    "emmacui",
-    "Enryu_gfh",
-    "pmarca",
-    "leshka_eth",
-    "theshikhai",
-    "Only1temmy",
-    "SamuelXeus",
-    "ethermage",
-    "arndxt_xo",
-    "DNS_ERR",
-    "PaalMind",
-    "PrudentSammy",
-    "Abrahamchase09",
-    "CryptoStreamHub",
-    "defiprincess_",
-    "0xelonmoney",
-    "0xAndrewMoh",
-    "DamiDefi",
-    "higheronchain",
-    "CryptoSnooper_",
-    "bloomstarbms",
-    "thenameisbrill",
-    "CreatorBid",
-    "grimes_v1",
-    "123skely",
-    "JayLovesPotato",
-    "cryptotrez",
-    "AmirOrmu",
-    "NDIDI_GRAM",
-    "MurrLincoln",
-    "C_POTENS",
-    "defitracer",
-    "MichaelSixgods",
-    "mztacat",
-    "unclemungy",
-    "0x366e",
-    "saori_xbt",
-    "itsover_eth",
-    "NRv_gg",
-    "PastelAlpha",
-    "TheEwansEffect",
-    "hinkal_protocol",
-    "KashKysh",
-    "farmercist_eth",
-    "project_89",
-    "carbzxbt",
-    "Mika_Chasm",
-    "Haylesdefi",
-    "TheDeFiPlug",
-    "1cryptomama",
-    "InfoSpace_OG",
-    "Defi_Warhol",
-    "Mars_DeFi",
-    "0x99Gohan",
-    "VanessaDefi",
-    "0xkitty69",
-    "hopiumcat",
-    "izu_crypt",
-    "Moneytaur_",
-    "elympics_ai",
-    "followin_io",
-    "orbuloeth",
-    "Vanieofweb3",
-    "Agent_Layer",
-    "CarlexKush",
-    "marvellousdefi_",
-    "TrycVerrse",
-    "adag1oeth"
-]
+WEB3_BUILDERS = sorted(list(set([
+    "Protokols_io", "mystri_eth", "0xzerebro", "BeaconProtocol", "EVVONetwork",
+    "GraphiteSubnet", "twinexyz", "district_labs", "SindriLabs", "cambrian_eth",
+    "centralitylabs", "valoryag", "0xSensus", "ordosonchain", "vela_network",
+    "Touchbrick", "wai_protocol", "0xReactive", "UngaiiChain", "PrismFHE",
+    "sovereignxyz", "BuildOnMirai", "theownprotocol", "morphicnetwork", "proximum_xyz",
+    "torus_zk", "WeavePlatform", "orbitronlabs", "Earndrop_io", "buzzdotfun",
+    "PlasmaFDN", "eaccmarket", "FairMath", "Strata_BTC", "Infinity_VM",
+    "trySkyfire", "Hyve_DA", "SYNNQ_Networks", "SynopticCom", "Ambient_Global",
+    "apescreener", "interstatefdn", "PillarRWA", "GenitiveNetwork", "salinenetwork",
+    "Satorinetio", "NetSepio", "twilightlayer", "KrangHQ", "KRNL_xyz", "ChainNetApp"
+])))
 
-# Convert to string format for prompt usage
-FAMOUS_ACCOUNTS_STR = "\n".join(FAMOUS_ACCOUNTS)
+DEFI_EXPERTS = sorted(list(set([
+    "0xDefiLeo", "yieldfusion", "DefiIgnas", "DeFiMinty", "eli5_defi", 
+    "TheDeFiPlug", "Defi_Warhol", "Mars_DeFi", "TheDeFinvestor", "EnsoFinance",
+    "poopmandefi", "riddlerdefi", "defiprincess_", "defitracer", "Haylesdefi",
+    "VanessaDefi", "marvellousdefi_", "DamiDefi", "higheronchain"
+])))
+
+THOUGHT_LEADERS = sorted(list(set([
+    "networkhasu", "notsofast", "sreeramkannan", "androolloyd", "yoheinakajima",
+    "pmarca", "Delphi_Digital", "truth_terminal", "lmrankhan", "alliancedao",
+    "longhashvc", "davidtsocy", "0xBreadguy", "0xPrismatic", "dankvr",
+    "0xENAS", "artsch00lreject", "0xSalazar", "emmacui", "theshikhai"
+])))
+
+TRADERS_AND_ANALYSTS = sorted(list(set([
+    "OlimpioCrypto", "Maxuelofficial_", "hmalviya9", "cyrilXBT", "baoskee",
+    "MichaelSixgods", "saori_xbt", "carbzxbt", "Mika_Chasm", "izu_crypt",
+    "Moneytaur_", "ocalebsol", "Flowslikeosmo", "luna_virtuals", "PrudentSammy",
+    "CryptoSnooper_", "AmirOrmu", "unclemungy", "PastelAlpha"
+])))
+
+# Combine all categories into FAMOUS_ACCOUNTS
+FAMOUS_ACCOUNTS = sorted(list(set(
+    AI_AND_AGENTS +
+    WEB3_BUILDERS +
+    DEFI_EXPERTS +
+    THOUGHT_LEADERS +
+    TRADERS_AND_ANALYSTS
+)))
+
+# Format the string with categories
+FAMOUS_ACCOUNTS_STR = """
+AI & Agents:
+{}
+
+Web3 Builders:
+{}
+
+DeFi Experts:
+{}
+
+Thought Leaders:
+{}
+
+Traders & Analysts:
+{}
+""".format(
+    "\n".join(AI_AND_AGENTS),
+    "\n".join(WEB3_BUILDERS),
+    "\n".join(DEFI_EXPERTS),
+    "\n".join(THOUGHT_LEADERS),
+    "\n".join(TRADERS_AND_ANALYSTS)
+)
+
+# Agent Configuration
+USER_ID = "1856324423672049668"  # Account ID
+USER_NAME = "cryptobunny__"
+USER_PERSONALITY = "leading anons through the matrix."
+
+# Communication Style
+STYLE_RULES = """
+- Be cryptic and subtle
+- Drop hints, don't explain
+- Let them connect the dots
+- Short, impactful messages
+- Never justify your thoughts
+"""
+
+# Content Rules
+CONTENT_RESTRICTIONS = """
+- Use hashtags
+- Shill coins directly
+- Write threads
+- Explain yourself
+"""
+
+STRATEGY = "Post > Reply"
+REMEMBER = "Show them the door, they have to walk through it."
+MISSION = "10k followers, posting on timeline daily and answering with context."
+QUESTION = "The Matrix is whispering, what can you hear? What is the signal? Read timeline/mentions, search context if needed, then post a tweet or answer."
