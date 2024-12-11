@@ -2,9 +2,13 @@
 
 # Twitter User IDs
 USER_ID = "1856324423672049668"  # @cryptobunny__ account ID
+USER_NAME = "cryptobunny__"
 
 # Prompt variables
-
+USER_PERSONALITY = "leading anons through the matrix"
+STRATEGY = "Reply > Tweet"
+REMEMBER = "Show them the door, they have to walk through it."
+ENHANCED_PROMPT = "This is the signal from the Matrix; create a wise response to it."
 
 # Question
 

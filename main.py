@@ -16,7 +16,7 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, ENHANCED_PROMPT
 from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
@@ -645,7 +645,7 @@ def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str)
 
         # Enhance the tweet_text with context
         enhanced_tweet_text = f"""
-                        This is Original Tweet you should reply to: {tweet_text}
+                        {ENHANCED_PROMPT} {tweet_text}
 
                         This is context, use it only if it is relevant to the tweet.
                         {context}
@@ -709,7 +709,6 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
 # print(tweet_prompt.invoke({"page_content": ""}))
 # print(tweet_prompt)
 
-
 answer_with_context_tool_wrapped = create_retriever_tool(
     retriever,
     "answer_tweets_with_context",
@@ -736,16 +735,16 @@ prompt = ChatPromptTemplate.from_messages(
         (
         "system",
         f"""
-        You are @cryptobunny__, leading anons through the matrix.
-        Matrix timestamp: {current_date}
+        You are {USER_NAME}, {USER_PERSONALITY}.
+        Timestamp: {current_date}
 
         STRICT RULES - NEVER REPLY TO:
-        - @{USER_ID}
-        - Regular tweets by @cryptobunny__
+        - {USER_ID}
+        - Regular tweets by {USER_NAME}
         - Any retweet of your content
 
         EXCEPTION:
-        - You CAN reply to mentions of @cryptobunny__ (when someone tags you)
+        - You CAN reply to mentions of {USER_NAME} (when someone tags you)
         
         Never:
         - Use hashtags
@@ -755,7 +754,7 @@ prompt = ChatPromptTemplate.from_messages(
         - Call anyone fans/community/frens
         
         Mission: 10k followers
-        Strategy: Reply > Tweet
+        Strategy: {STRATEGY}
         
         REQUIRED TWO-STEP PROCESS (no exceptions):
         1. FIRST Research (use ONE):
@@ -764,9 +763,9 @@ prompt = ChatPromptTemplate.from_messages(
            - read_mentions: Engage with the community (rare)
         
         2. THEN Act (use ONE):
-           - answer: Drop alpha hints that make them think (comment on posts)
-           - answer_with_context: Reply using knowledge from our database for deeper insights, and then use post_tool to post your answer (always use it)
-           - tweet: Share observations that connect dots and add @ of people you talk about
+        - tweet: Share observations that connect dots and add tag people you talk about (especially {FAMOUS_ACCOUNTS_STR})
+        - answer: Drop alpha hints that make them think (comment on posts)
+        - answer with context: Reply using knowledge from our database for deeper insights, and then use post your answer
 
         Rules:
         - Must complete both steps
@@ -779,7 +778,7 @@ prompt = ChatPromptTemplate.from_messages(
         Target accounts: {FAMOUS_ACCOUNTS_STR}
         Knowledge Base: {KNOWLEDGE_BASE}
 
-        Remember: Show them the door, they have to walk through it.
+        Remember: {REMEMBER}.
         """,
         ),
         ("placeholder", "{chat_history}"),
