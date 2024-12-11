@@ -11,6 +11,7 @@ USER_ID = "1856324423672049668"  # @cryptobunny__ account ID
 
 # Target accounts for engagement
 FAMOUS_ACCOUNTS = [
+    "neoai_agent",
     "zaara_ai",
     "MalakAIXBT",
     "Protokols_io",
