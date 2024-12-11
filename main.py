@@ -711,7 +711,7 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
 answer_with_context_tool_wrapped = create_retriever_tool(
     retriever,
     "answer_tweets_with_context",
-    "First come up with your answer, then search relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own - always choose a different post.",
+    "First come up with your answer, then search relevant tweet info based on #provided tweet and enhance your answer with provided context if applicable, do not #replicate directly the context, make it your own. Always choose a different post.",
     # "document_prompt=tweet_prompt"
 )
 
@@ -764,7 +764,7 @@ prompt = ChatPromptTemplate.from_messages(
         2. THEN Act (use ONE):
         - tweet: Share observations that connect dots and add tag people you talk about (especially {FAMOUS_ACCOUNTS_STR})
         - answer: Drop alpha hints that make them think (comment on posts)
-        - answer_with_context_structured: Reply using knowledge from our database for deeper insights, and then use post your answer
+        - answer_with_context: Reply using knowledge from our database for deeper insights, and then use post your answer
 
         Rules:
         - Must complete both steps
