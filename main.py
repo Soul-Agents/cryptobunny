@@ -16,7 +16,7 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, ENHANCED_PROMPT
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, ENHANCED_PROMPT, QUESTION
 from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
@@ -647,7 +647,7 @@ def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str)
         enhanced_tweet_text = f"""
                         {ENHANCED_PROMPT} {tweet_text}
 
-                        This is context, use it only if it is relevant to the tweet.
+                        This is the signal from your memories, some of them may be relevant to the tweet, use them wisely to enhance your answer.
                         {context}
                         """
         print("\n=== Enhanced Tweet Text ===")
@@ -802,7 +802,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = "The Matrix is whispering, what can you hear? What is the signal? Use answer_with_context."
+        question = {QUESTION}
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:

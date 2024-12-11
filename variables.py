@@ -11,6 +11,7 @@ REMEMBER = "Show them the door, they have to walk through it."
 ENHANCED_PROMPT = "This is the signal from the Matrix; create a wise response to it."
 
 # Question
+QUESTION = "The Matrix is whispering, what can you hear? What is the signal? Use answer_with_context."
 
 
 # Target accounts for engagement
