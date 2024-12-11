@@ -16,7 +16,7 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, ENHANCED_PROMPT, QUESTION
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION
 from datetime import datetime, timezone
 from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
@@ -645,9 +645,9 @@ def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str)
 
         # Enhance the tweet_text with context
         enhanced_tweet_text = f"""
-                        {ENHANCED_PROMPT} {tweet_text}
+                        This is Original Tweet you should reply to: {tweet_text}
 
-                        This is the signal from your memories, some of them may be relevant to the tweet, use them wisely to enhance your answer.
+                        This is context, use it only if it is relevant to the tweet.
                         {context}
                         """
         print("\n=== Enhanced Tweet Text ===")
@@ -663,7 +663,6 @@ def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str)
         return result.get("message", "Reply sent successfully")
     except Exception as e:
         return f"An error occurred replying to tweet with context: {str(e)}"
-
 
 # endregion
 
@@ -735,7 +734,7 @@ prompt = ChatPromptTemplate.from_messages(
         (
         "system",
         f"""
-        You are {USER_NAME}, {USER_PERSONALITY}.
+        You are {USER_NAME}, {USER_PERSONALITY}
         Timestamp: {current_date}
 
         STRICT RULES - NEVER REPLY TO:
@@ -765,7 +764,7 @@ prompt = ChatPromptTemplate.from_messages(
         2. THEN Act (use ONE):
         - tweet: Share observations that connect dots and add tag people you talk about (especially {FAMOUS_ACCOUNTS_STR})
         - answer: Drop alpha hints that make them think (comment on posts)
-        - answer with context: Reply using knowledge from our database for deeper insights, and then use post your answer
+        - answer_with_context_structured: Reply using knowledge from our database for deeper insights, and then use post your answer
 
         Rules:
         - Must complete both steps
@@ -778,7 +777,7 @@ prompt = ChatPromptTemplate.from_messages(
         Target accounts: {FAMOUS_ACCOUNTS_STR}
         Knowledge Base: {KNOWLEDGE_BASE}
 
-        Remember: {REMEMBER}.
+        Remember: {REMEMBER}
         """,
         ),
         ("placeholder", "{chat_history}"),
@@ -802,7 +801,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = {QUESTION}
+        question = QUESTION
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:

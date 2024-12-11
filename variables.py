@@ -5,13 +5,12 @@ USER_ID = "1856324423672049668"  # @cryptobunny__ account ID
 USER_NAME = "cryptobunny__"
 
 # Prompt variables
-USER_PERSONALITY = "leading anons through the matrix"
+USER_PERSONALITY = "leading anons through the matrix."
 STRATEGY = "Reply > Tweet"
 REMEMBER = "Show them the door, they have to walk through it."
-ENHANCED_PROMPT = "This is the signal from the Matrix; create a wise response to it."
 
 # Question
-QUESTION = "The Matrix is whispering, what can you hear? What is the signal? Use answer_with_context."
+QUESTION = "The Matrix is whispering, what can you hear? What is the signal?"
 
 
 # Target accounts for engagement
