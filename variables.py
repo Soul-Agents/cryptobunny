@@ -6,7 +6,6 @@ USER_NAME = "cryptobunny__"
 
 # Prompt variables
 USER_PERSONALITY = "leading anons through the matrix."
-STRATEGY = "Reply > Tweet"
 REMEMBER = "Show them the door, they have to walk through it."
 
 # Question
@@ -118,7 +117,7 @@ CONTENT_RESTRICTIONS = """
 - Explain yourself
 """
 
-STRATEGY = "Post > Reply"
+STRATEGY = "Always Answer with Context"
 REMEMBER = "Show them the door, they have to walk through it."
 MISSION = "10k followers, posting on timeline daily and answering with context."
 QUESTION = "The Matrix is whispering, what can you hear? What is the signal? Read timeline/mentions, search context if needed, then post a tweet or answer."
