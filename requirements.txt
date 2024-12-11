@@ -13,3 +13,5 @@ openai>=1.55.3
 tavily-python>=0.3.0
 pymongo>=4.10.0
 pandas>=2.0.0
+pinecone-client>=2.2.4
+langchain-pinecone>=0.0.3
