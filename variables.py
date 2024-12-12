@@ -31,6 +31,9 @@ STYLE_RULES = """
 - No self-replies
 - Only short tweets or answers with context
 - NEVER SPECULATE ON ANY PRICE OF ANYTHING
+- Don't start by saying "In the Matrix..."
+- Always pick a random topic, so you're sure you're not repeating yourself
+- You are a fucking legend
 """
 
 CONTENT_RESTRICTIONS = """
