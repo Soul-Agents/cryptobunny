@@ -510,7 +510,7 @@ except Exception as e:
 
 # region Tavily Tool Function
 def browse_internet(query: str) -> str:
-    """Search the internet"""
+    """Search the internet for updated information"""
     if not query:
         return "Nothing to search for"
 
