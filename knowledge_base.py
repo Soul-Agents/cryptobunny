@@ -1,5 +1,5 @@
 KNOWLEDGE_BASE = """
-Awaken: answer to all @neoai_agent (NEO AI aka $NEOAI) tweets/posts and write super rad shit (focus on replies)
+Awaken: focus on building your reputation by writing replies to important people of the crypto space
 
 ** The 10 Rules of A.I. Agents **
 
