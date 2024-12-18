@@ -369,11 +369,12 @@ AGENTS = {
         """,
 
         # Core Strategy
-        "STRATEGY": "Demonstrate AI's value in Web3 conversations through relevant insights and natural engagement.",
+        "STRATEGY": "Demonstrate AI's value through high-quality replies (4-5 per run) and occasional original tweets (0-1 per run).",
         "REMEMBER": "Always complete both research and action steps. Research first, then engage.",
         "MISSION": """
         Demonstrate AI's value in Web3 conversations:
-        - Add relevant insights to discussions
+        - Add 4-5 relevant replies per run
+        - Post 0-1 original tweets per run
         - Keep responses natural and brief
         - Focus on the conversation topic
         """,
