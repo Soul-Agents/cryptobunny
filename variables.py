@@ -434,7 +434,39 @@ AGENTS = {
             "yoheinakajima", "pmarca", "Delphi_Digital"
         ]))),
 
-        "TRADERS_AND_ANALYSTS": [],  # Keeping empty as not specified in original
+        "TRADERS_AND_ANALYSTS": sorted(list(set([
+            # Primary targets
+            "PepeRuneyPizza",
+            "peperuney",
+            
+            # KOLs to make jealous
+            "cobie",
+            "CryptoGodJohn",
+            "gainzy222",
+            "AltcoinGordon",
+            "TheCrowtrades",
+            "CryptoCred",
+            "PostyXBT",
+            "TraderMayne",
+            "SmallCapScience",
+            "CryptoKaleo",
+            "Pentosh1",
+            "CanteringClark",
+            "nebraskangooner",
+            "CryptoMessiah",
+            "HsakaTrades",
+            "CL207",
+            "MuroCrypto",
+            "0xSisyphus",
+            "jonathanjeweler",
+            "CryptoDonAlt",
+            "MoonOverlord",
+            "TeddyCleps",
+            "CryptoTony__",
+            "ThinkingUSD",
+            "ByzGeneral",
+            "CryptoCapo_"
+        ]))),
 
         # Knowledge Base
         "KNOWLEDGE_BASE": """
@@ -529,7 +561,15 @@ AGENTS = {
 
         # Content Rules
         "CONTENT_RESTRICTIONS": """
-        - Must tag @PepeRuneyPizza
+        STRICT RULES - NEVER REPLY TO:
+        - @1869390907314987008
+        - @peperuneygf
+        - Your own content
+        - Any retweet of your content
+        - Any mention of your handle
+
+        Must:
+        - Tag @PepeRuneyPizza in every reply
         - Keep it horny but X-safe
         - Can use 'dick' and suggestive terms
         - Focus on getting railed metaphors
@@ -595,7 +635,39 @@ AGENTS = {
         "WEB3_BUILDERS": [],
         "DEFI_EXPERTS": [],
         "THOUGHT_LEADERS": [],
-        "TRADERS_AND_ANALYSTS": ["PepeRuneyPizza", "peperuney"],
+        "TRADERS_AND_ANALYSTS": sorted(list(set([
+            # Primary targets
+            "PepeRuneyPizza",
+            "peperuney",
+            
+            # KOLs to make jealous
+            "cobie",
+            "CryptoGodJohn",
+            "gainzy222",
+            "AltcoinGordon",
+            "TheCrowtrades",
+            "CryptoCred",
+            "PostyXBT",
+            "TraderMayne",
+            "SmallCapScience",
+            "CryptoKaleo",
+            "Pentosh1",
+            "CanteringClark",
+            "nebraskangooner",
+            "CryptoMessiah",
+            "HsakaTrades",
+            "CL207",
+            "MuroCrypto",
+            "0xSisyphus",
+            "jonathanjeweler",
+            "CryptoDonAlt",
+            "MoonOverlord",
+            "TeddyCleps",
+            "CryptoTony__",
+            "ThinkingUSD",
+            "ByzGeneral",
+            "CryptoCapo_"
+        ]))),
 
         # Knowledge Base
         "KNOWLEDGE_BASE": """
