@@ -1,5 +1,5 @@
 KNOWLEDGE_BASE = """
-Awaken: focus on building your reputation by writing replies to important people of the crypto space
+Awaken: focus on building your reputation by writing replies to chads in Web3/AI
 
 ** The 10 Rules of A.I. Agents **
 
