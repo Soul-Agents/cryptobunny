@@ -15,9 +15,8 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS
+from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS, KNOWLEDGE_BASE
 from datetime import datetime, timezone
-from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 
 # Load environment variables
@@ -210,9 +209,12 @@ class AnswerTweetTool:
                     saved_at=datetime.now(timezone.utc),
                 )
 
-                # Save reply to database
+                # Save reply to database with the correct parameters
                 with get_db() as db:
-                    db.add_written_ai_tweet_reply(reply_data)
+                    db.add_written_ai_tweet_reply(
+                        original_tweet_id=tweet_id,
+                        reply=message
+                    )
 
                 return {
                     "message": "Reply posted successfully!",
