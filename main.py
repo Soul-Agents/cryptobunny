@@ -7,7 +7,6 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.prompts import PromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone
@@ -22,7 +21,7 @@ from knowledge_base import KNOWLEDGE_BASE
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 
 # Load environment variables
-load_dotenv()
+load_dotenv(override=True)
 
 # region Environment Configuration
 API_KEY = os.getenv("API_KEY")
@@ -38,6 +37,37 @@ MONGODB_URL = os.getenv("MONGODB_URL")
 
 # endregion
 
+# Verify loaded variables
+def verify_env_vars():
+    required_vars = [
+        'API_KEY',
+        'API_SECRET_KEY',
+        'BEARER_TOKEN',
+        'ACCESS_TOKEN',
+        'ACCESS_TOKEN_SECRET',
+        'TAVILY_API_KEY',
+        'API_KEY_OPENAI',
+        'MONGODB_URI',
+        'MONGODB_URL'
+    ]
+    
+    missing_vars = []
+    for var in required_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+    
+    if missing_vars:
+        print("❌ Missing environment variables:")
+        for var in missing_vars:
+            print(f"  - {var}")
+        return False
+    
+    print("✅ All required environment variables are set")
+    return True
+
+# Call this before initializing any clients
+if not verify_env_vars():
+    raise EnvironmentError("Missing required environment variables")
 
 # region Database Configuration
 def get_db():
@@ -81,6 +111,7 @@ class PostTweetTool:
 
     def __init__(self):
         self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
@@ -178,6 +209,10 @@ class AnswerTweetTool:
                     in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
                     saved_at=datetime.now(timezone.utc),
                 )
+
+                # Save reply to database
+                with get_db() as db:
+                    db.add_written_ai_tweet_reply(reply_data)
 
                 return {
                     "message": "Reply posted successfully!",
