@@ -6,7 +6,6 @@ from bson import json_util
 from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
-from db import TweetDB
 from db_utils import get_db
 
 # Load environment variables
