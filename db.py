@@ -72,7 +72,7 @@ class TweetDB:
             print(f"[DB] Connection string used: {mongodb_uri[:20]}...")  # Show partial URI
             raise
     
-    def get_last_written_ai_tweets(self, limit: int = 10) -> List[WrittenAITweet]:
+    def get_last_written_ai_tweets(self, limit: int = 21) -> List[WrittenAITweet]:
         """Get the last N tweets written by AI"""
         try:
             return list(self.written_ai_tweets.find().sort("saved_at", -1).limit(limit))
