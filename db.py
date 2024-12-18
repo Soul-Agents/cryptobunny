@@ -80,7 +80,7 @@ class TweetDB:
             print(f"Error fetching last written AI tweets: {e}")
             return []
 
-    def get_last_written_ai_tweet_replies(self, limit: int = 10) -> List[WrittenAITweetReply]:
+    def get_last_written_ai_tweet_replies(self, limit: int = 21) -> List[WrittenAITweetReply]:
         """Get the last N replies written by AI"""
         try:
             return list(self.written_ai_tweets_replies.find().sort("saved_at", -1).limit(limit))
