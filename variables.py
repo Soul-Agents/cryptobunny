@@ -110,7 +110,7 @@ TRADERS_AND_ANALYSTS = sorted(list(set([
     "OlimpioCrypto", "Maxuelofficial_", "hmalviya9", "cyrilXBT", "baoskee",
     "MichaelSixgods", "saori_xbt", "carbzxbt", "Mika_Chasm", "izu_crypt",
     "Moneytaur_", "ocalebsol", "Flowslikeosmo", "luna_virtuals", "PrudentSammy",
-    "CryptoSnooper_", "AmirOrmu", "unclemungy", "PastelAlpha"
+    "CryptoSnooper_", "AmirOrmu", "unclemungy", "PastelAlpha", "PepeRuneyPizza"
 ])))
 
 # Combine all categories into FAMOUS_ACCOUNTS
