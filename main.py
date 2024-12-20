@@ -742,7 +742,7 @@ prompt = ChatPromptTemplate.from_messages([
     REQUIRED THREE-STEP PROCESS (no exceptions):
     1. FIRST Observe (use ONE):
        - read_timeline: Fetch and display the latest 10 tweets from your home timeline
-       - read_mentions: Fetch and display the latest 10 tweets that mention you
+       - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
     
     2. THEN Research (use ONE or BOTH):
        - browse_internet: Search recent news and discussions from websites
