@@ -643,7 +643,7 @@ def read_mentions_tool() -> str:
     try:
         mentions = mentions_tool._run()  # This already has its own DB context
         if not mentions:
-            return "Matrix scan complete. No new mentions. Awaiting new signals..."
+            return "X scan complete. No new mentions. Awaiting new signals..."
 
         formatted_mentions = []
         for mention in mentions[:10]:
@@ -655,12 +655,12 @@ def read_mentions_tool() -> str:
                 formatted_mentions.append(formatted_mention)
 
         if not formatted_mentions:
-            return "Matrix scan complete. No valid mentions found in the signal."
+            return "X scan complete. No valid mentions found in the signal."
 
         return "\n\n".join(formatted_mentions)
     except Exception as e:
-        print(f"[Critical] Matrix connection error: {str(e)}")
-        return "Matrix connection disrupted. Attempting to stabilize..."
+        print(f"[Critical] X connection error: {str(e)}")
+        return "X connection disrupted. Attempting to stabilize..."
 
 # endregion
 
