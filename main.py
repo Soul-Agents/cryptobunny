@@ -273,7 +273,7 @@ class ReadTweetsTool:
                     return current_tweets
 
                 try:
-                    since_id = db.get_most_recent_tweet_id()
+                    since_id = db.get_most_recent_tweet_id(USER_ID)
                     print(f"Fetching new tweets since ID: {since_id}")
 
                     response = self.api.get_home_timeline(
@@ -804,7 +804,7 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 
 
 # region Service Execution
-def run_crypto_agent(user_id: str, question: str):
+def run_crypto_agent(question: str):
 
     agent_executor = AgentExecutor(
         agent=agent,
@@ -816,7 +816,9 @@ def run_crypto_agent(user_id: str, question: str):
 
     try:
         response = agent_executor.invoke(
-            {"input": question, "user_id": user_id}  # Pass user_id to the agent
+            {
+                "input": question,
+            }
         )
         if "Already replied to this mention" in str(response):
             # Try again with a new action
@@ -833,9 +835,8 @@ def run_crypto_agent(user_id: str, question: str):
 
 if __name__ == "__main__":
     try:
-        user_id = USER_ID  # This should come from configuration or environment
         question = QUESTION
-        response = run_crypto_agent(user_id, question)
+        response = run_crypto_agent(question)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
