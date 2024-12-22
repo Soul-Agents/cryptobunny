@@ -322,7 +322,9 @@ class ReadTweetsTool:
                             for tweet in response.data
                         ]
 
-                        db.add_tweets(formatted_tweets)  # Using same connection
+                        db.add_tweets(
+                            USER_ID, formatted_tweets
+                        )  # Using same connection
                         print(f"Added {len(formatted_tweets)} new tweets to database")
                         return formatted_tweets
 
