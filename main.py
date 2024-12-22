@@ -15,7 +15,19 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS, KNOWLEDGE_BASE
+from variables import (
+    USER_ID,
+    FAMOUS_ACCOUNTS_STR,
+    USER_NAME,
+    USER_PERSONALITY,
+    STRATEGY,
+    REMEMBER,
+    QUESTION,
+    MISSION,
+    STYLE_RULES,
+    CONTENT_RESTRICTIONS,
+    KNOWLEDGE_BASE,
+)
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 
@@ -33,40 +45,45 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
+USER_ID = os.getenv("USER_ID")
 
 # endregion
+
 
 # Verify loaded variables
 def verify_env_vars():
     required_vars = [
-        'API_KEY',
-        'API_SECRET_KEY',
-        'BEARER_TOKEN',
-        'ACCESS_TOKEN',
-        'ACCESS_TOKEN_SECRET',
-        'TAVILY_API_KEY',
-        'API_KEY_OPENAI',
-        'MONGODB_URI',
-        'MONGODB_URL'
+        "API_KEY",
+        "API_SECRET_KEY",
+        "BEARER_TOKEN",
+        "ACCESS_TOKEN",
+        "ACCESS_TOKEN_SECRET",
+        "TAVILY_API_KEY",
+        "API_KEY_OPENAI",
+        "MONGODB_URI",
+        "MONGODB_URL",
+        "USER_ID",
     ]
-    
+
     missing_vars = []
     for var in required_vars:
         if not os.getenv(var):
             missing_vars.append(var)
-    
+
     if missing_vars:
         print("❌ Missing environment variables:")
         for var in missing_vars:
             print(f"  - {var}")
         return False
-    
+
     print("✅ All required environment variables are set")
     return True
+
 
 # Call this before initializing any clients
 if not verify_env_vars():
     raise EnvironmentError("Missing required environment variables")
+
 
 # region Database Configuration
 def get_db():
@@ -85,30 +102,30 @@ llm = ChatOpenAI(
     presence_penalty=0.8,
 )
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-large",
-    api_key=API_KEY_OPENAI)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
 # endregion
 
-#region Pinecone Configuration
+# region Pinecone Configuration
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index("soulsagent")
-#endregion
+# endregion
 
-#region INIT Pinecone vector db
+# region INIT Pinecone vector db
 docsearch = PineconeVectorStore(
     index=index,
     embedding=embeddings,
 )
 retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-#endregion
+# endregion
+
 
 # region Twitter Service Classes
 class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Use this tool to post a new tweet to the timeline."
 
-    def __init__(self):
+    def __init__(self, user_id: str):
+        self.user_id = user_id
         self.api = tweepy.Client(
             bearer_token=BEARER_TOKEN,
             consumer_key=API_KEY,
@@ -132,6 +149,7 @@ class PostTweetTool:
 
             if response.data:
                 tweet_data = WrittenAITweet(
+                    user_id=self.user_id,
                     tweet_id=str(response.data["id"]),
                     text=response.data["text"],
                     edit_history_tweet_ids=response.data.get(
@@ -173,7 +191,6 @@ class AnswerTweetTool:
     name: str = "Answer tweet"
     description: str = "Reply to a specific tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
-    
 
     def __init__(self):
         # Initialize the Client for v2 endpoints with rate limit handling
@@ -201,6 +218,7 @@ class AnswerTweetTool:
 
             if response.data:
                 reply_data = WrittenAITweetReply(
+                    user_id=USER_ID,
                     tweet_id=str(response.data["id"]),
                     reply={"reply": message},
                     public_metrics=response.data.get("public_metrics", {}),
@@ -212,8 +230,7 @@ class AnswerTweetTool:
                 # Save reply to database with the correct parameters
                 with get_db() as db:
                     db.add_written_ai_tweet_reply(
-                        original_tweet_id=tweet_id,
-                        reply=message
+                        user_id=USER_ID, original_tweet_id=tweet_id, reply=message
                     )
 
                 return {
@@ -235,7 +252,9 @@ class AnswerTweetTool:
 class ReadTweetsTool:
     name: str = "Read tweets"
     description: str = "Read X timeline for insights"
+
     def __init__(self):
+
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -248,7 +267,7 @@ class ReadTweetsTool:
     def _run(self) -> list:
         try:
             with get_db() as db:  # Single database connection for all operations
-                needs_update, current_tweets = db.check_database_status()
+                needs_update, current_tweets = db.check_database_status(USER_ID)
 
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
@@ -329,7 +348,11 @@ class ReadTweetsTool:
 class ReadMentionsTool:
     name: str = "Read mentions"
     description: str = "Read mentions to engage with the community"
-    def __init__(self):
+
+    def __init__(
+        self,
+    ):
+
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -545,6 +568,7 @@ except Exception as e:
     raise  # Re-raise the exception since we can't continue without tools
 # endregion
 
+
 # region Tavily Tool Function
 def browse_internet(query: str) -> str:
     """Search the internet for updated information"""
@@ -560,7 +584,9 @@ def browse_internet(query: str) -> str:
         print(f"[Search] Failed: {str(e)}")  # Keeping error logging
         return "Search failed"
 
+
 # endregion
+
 
 # region Twitter Tool Functions
 def post_tweet_tool(message: str) -> str:
@@ -662,6 +688,7 @@ def read_mentions_tool() -> str:
         print(f"[Critical] X connection error: {str(e)}")
         return "X connection disrupted. Attempting to stabilize..."
 
+
 # endregion
 
 # region Tool Wrapping
@@ -715,10 +742,11 @@ tools = [
 current_date = datetime.now().strftime("%B %Y")
 
 
-prompt = ChatPromptTemplate.from_messages([
-    (
-    "system",
-    f"""
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            f"""
     You are {USER_NAME}, {USER_PERSONALITY}
     Timestamp: {current_date}
 
@@ -765,33 +793,39 @@ prompt = ChatPromptTemplate.from_messages([
 
     Remember: {REMEMBER}
     """,
-    ),
-    ("placeholder", "{chat_history}"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
+        ),
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ]
+)
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 # endregion
 
 
 # region Service Execution
-def run_crypto_agent(question: str):
+def run_crypto_agent(user_id: str, question: str):
+
     agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        verbose=True, 
+        agent=agent,
+        tools=tools,
+        verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10
+        max_iterations=10,
     )
 
     try:
-        response = agent_executor.invoke({"input": question})
+        response = agent_executor.invoke(
+            {"input": question, "user_id": user_id}  # Pass user_id to the agent
+        )
         if "Already replied to this mention" in str(response):
             # Try again with a new action
-            return agent_executor.invoke({
-                "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
-            })
+            return agent_executor.invoke(
+                {
+                    "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
+                }
+            )
         return response
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
@@ -800,8 +834,9 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
+        user_id = USER_ID  # This should come from configuration or environment
         question = QUESTION
-        response = run_crypto_agent(question)
+        response = run_crypto_agent(user_id, question)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")

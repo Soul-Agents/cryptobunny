@@ -1,236 +1,135 @@
-from datetime import datetime
-import pandas as pd
-from pymongo import MongoClient
+from db import TweetDB
+from datetime import datetime, timezone
 import json
-from bson import json_util
-from typing import List, Dict, Any
-import os
-from dotenv import load_dotenv
-from db_utils import get_db
+from typing import Dict, List
 
-# Load environment variables
-load_dotenv()
 
-# MongoDB connection details
-MONGODB_URL = os.getenv("MONGODB_URL")
-MONGODB_URI = os.getenv("MONGODB_URI")
-DB_NAME = "tweets"
-
-def get_mongodb_client():
-    """Create a MongoDB client with context manager"""
-    try:
-        mongodb_uri = os.getenv("MONGODB_URL")
-        
-        if not mongodb_uri or "railway.internal" in mongodb_uri:
-            mongodb_uri = os.getenv("MONGODB_URI")
-        
-        if not mongodb_uri:
-            raise ValueError("No valid MongoDB connection string found")
-            
-        client = MongoClient(mongodb_uri)
-        client.admin.command('ping')
-        print("[DB] Successfully connected to MongoDB!")
-        return client
-    except Exception as e:
-        print(f"[DB] Failed to connect to MongoDB: {e}")
-        raise
-
-class MongoDBConnection:
-    def __init__(self):
-        self.client = None
-        self.db = None
-
-    def __enter__(self):
-        self.client = get_mongodb_client()
-        self.db = self.client[DB_NAME]
-        return self.db
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.client:
-            self.client.close()
-            print("[DB] MongoDB connection closed")
-
-def cleanup_collections(db):
-    """Hard delete everything that doesn't match the schema"""
-    # Define exact schema fields
-    tweet_fields = {
-        "tweet_id", "text", "created_at", "author_id", "lang",
-        "public_metrics", "conversation_id", "in_reply_to_user_id",
-        "in_reply_to_tweet_id", "replied_to", "replied_at"
+def generate_test_tweet(tweet_id: str, user_id: str) -> Dict:
+    """Generate a test tweet with required fields"""
+    return {
+        "tweet_id": tweet_id,
+        "user_id": user_id,
+        "text": f"Test tweet {tweet_id}",
+        "created_at": datetime.now(timezone.utc),
+        "author_id": user_id,
+        "public_metrics": {
+            "retweet_count": 0,
+            "reply_count": 0,
+            "like_count": 0,
+            "quote_count": 0,
+        },
+        "conversation_id": f"conv_{tweet_id}",
+        "in_reply_to_user_id": None,
+        "in_reply_to_tweet_id": None,
+        "replied_to": False,
     }
-    
-    written_ai_tweet_fields = {
-        "tweet_id", "edit_history_tweet_ids", "saved_at", "text",
-        "public_metrics", "conversation_id", "in_reply_to_user_id",
-        "replied_to", "replied_at"
-    }
-    
-    written_ai_tweet_reply_fields = {
-        "tweet_id", "reply", "public_metrics", "conversation_id",
-        "in_reply_to_user_id", "saved_at"
-    }
-    
-    ai_mention_tweet_fields = {
-        "tweet_id", "text", "created_at", "replied_to", "replied_at"
-    }
-    
-    try:
-        # Clean up tweets collection
-        result_tweets = db.tweets.delete_many({
-            "$or": [
-                {"tweet_id": {"$exists": False}},
-                {"text": {"$exists": False}},
-                {"created_at": {"$exists": False}},
-                {"author_id": {"$exists": False}}
-            ]
-        })
-        print(f"[DB] Cleaned up {result_tweets.deleted_count} non-compliant tweets")
-        
-        # Clean up written_ai_tweets collection
-        result_ai_tweets = db.written_ai_tweets.delete_many({
-            "$or": [
-                {"tweet_id": {"$exists": False}},
-                {"text": {"$exists": False}},
-                {"saved_at": {"$exists": False}}
-            ]
-        })
-        print(f"[DB] Cleaned up {result_ai_tweets.deleted_count} non-compliant AI tweets")
-        
-        # Clean up written_ai_tweets_replies collection
-        result_replies = db.written_ai_tweets_replies.delete_many({
-            "$or": [
-                {"tweet_id": {"$exists": False}},
-                {"reply": {"$exists": False}}
-            ]
-        })
-        print(f"[DB] Cleaned up {result_replies.deleted_count} non-compliant AI tweet replies")
-        
-        # Clean up ai_mention_tweets collection
-        result_mentions = db.ai_mention_tweets.delete_many({
-            "$or": [
-                {"tweet_id": {"$exists": False}},
-                {"replied_to": {"$exists": False}}
-            ]
-        })
-        print(f"[DB] Cleaned up {result_mentions.deleted_count} non-compliant mentions")
-        
-        print("[DB] Successfully cleaned up all collections!")
-        
-    except Exception as e:
-        print(f"[DB] Error during cleanup: {e}")
-        raise
 
-def delete_existing_mentions(db):
-    """Delete all existing mentions and related data for safety"""
+
+def test_db_functions(user_id: str):
+    """Test all database functions for a specific user ID"""
+    results = {}
+
     try:
-        # Delete all mentions
-        result_mentions = db.ai_mention_tweets.delete_many({})
-        print(f"[DB] Deleted {result_mentions.deleted_count} mentions")
-        
-        # Delete all tweets that are mentions or replies
-        result_tweets = db.tweets.delete_many({
-            "$or": [
-                {"in_reply_to_user_id": {"$exists": True}},
-                {"in_reply_to_tweet_id": {"$exists": True}},
-                {"replied_to": True}
+        with TweetDB() as db:
+            print("\n=== Starting Database Function Tests ===\n")
+
+            # Test 1: Add regular tweets
+            print("Testing add_tweets...")
+            test_tweets = [generate_test_tweet(f"test_{i}", user_id) for i in range(3)]
+            add_result = db.add_tweets(user_id, test_tweets)
+            results["add_tweets"] = add_result
+            print(f"Add tweets result: {add_result}")
+
+            # Test 2: Get all tweets
+            print("\nTesting get_all_tweets...")
+            all_tweets = db.get_all_tweets(user_id, limit=10)
+            results["get_all_tweets"] = len(all_tweets)
+            print(f"Retrieved {len(all_tweets)} tweets")
+
+            # Test 3: Add and get AI mention tweets
+            print("\nTesting AI mention tweets...")
+            test_mentions = [
+                generate_test_tweet(f"mention_{i}", user_id) for i in range(2)
             ]
-        })
-        print(f"[DB] Deleted {result_tweets.deleted_count} related tweets")
-        
-        # Delete all written AI tweet replies
-        result_replies = db.written_ai_tweets_replies.delete_many({})
-        print(f"[DB] Deleted {result_replies.deleted_count} AI tweet replies")
-        
-        print("[DB] Successfully cleared all mentions and related data!")
-        
-    except Exception as e:
-        print(f"[DB] Error during mention deletion: {e}")
-        raise
+            mention_result = db.add_ai_mention_tweets(user_id, test_mentions)
+            results["add_ai_mention_tweets"] = mention_result
 
-def print_collection_stats(db):
-    """Print statistics about each collection"""
-    collections = db.list_collection_names()
-    
-    print("\nDatabase Statistics:")
-    print("-" * 50)
-    
-    for collection_name in collections:
-        try:
-            count = db[collection_name].count_documents({})
-            print(f"\n{collection_name}: {count} documents")
-            
-            if count > 0:
-                sample = db[collection_name].find_one()
-                print("\nSample document structure:")
-                formatted_sample = json.dumps(json.loads(json_util.dumps(sample)), indent=2)
-                print(formatted_sample)
-                
-                fields = list(sample.keys())
-                print(f"\nFields: {', '.join(fields)}")
-                print("-" * 50)
-        except Exception as e:
-            print(f"Error analyzing {collection_name}: {e}")
+            mentions = db.get_ai_mention_tweets(user_id)
+            results["get_ai_mention_tweets"] = len(mentions)
+            print(
+                f"AI mentions results: Added={mention_result}, Retrieved={len(mentions)}"
+            )
 
-def backup_database(db):
-    """Create a backup of the database before cleanup"""
-    export_dir = "exports"
-    os.makedirs(export_dir, exist_ok=True)
-    
-    try:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = os.path.join(export_dir, f"backup_before_cleanup_{timestamp}.json")
-        
-        all_data = {}
-        for collection in db.list_collection_names():
-            all_data[collection] = json.loads(json_util.dumps(list(db[collection].find())))
-        
-        with open(filename, 'w') as f:
-            json.dump(all_data, f, indent=2)
-        
-        print(f"[DB] Backup created at: {filename}")
-        return filename
-    except Exception as e:
-        print(f"[DB] Error creating backup: {e}")
-        raise
+            # Test 4: Test unreplied/replied tweets
+            print("\nTesting unreplied/replied tweets...")
+            unreplied = db.get_unreplied_tweets(user_id)
+            results["unreplied_tweets"] = len(unreplied)
 
-def clean_mentions():
-    try:
-        with get_db() as db:
-            # Drop the entire mentions collection
-            
-            # Or alternatively, remove just the empty mentions:
-            result = db.ai_mention_tweets.delete_many({"text": {"$exists": False}})
-            print(f"Removed {result.deleted_count} empty mentions")
-            
+            # Mark one tweet as replied
+            if unreplied:
+                db.add_replied_tweet(user_id, unreplied[0]["tweet_id"])
+
+            replied = db.get_replied_tweets(user_id)
+            results["replied_tweets"] = len(replied)
+            print(f"Unreplied tweets: {len(unreplied)}, Replied tweets: {len(replied)}")
+
+            # Test 5: Written AI tweets
+            print("\nTesting written AI tweets...")
+            test_ai_tweet = {
+                "tweet_id": "ai_test_1",
+                "text": "AI generated test tweet",
+                "created_at": datetime.now(timezone.utc),
+                "public_metrics": {
+                    "retweet_count": 0,
+                    "reply_count": 0,
+                    "like_count": 0,
+                    "quote_count": 0,
+                },
+                "saved_at": datetime.now(timezone.utc),
+            }
+            ai_tweet_result = db.add_written_ai_tweet(user_id, test_ai_tweet)
+            results["add_written_ai_tweet"] = ai_tweet_result
+
+            last_ai_tweets = db.get_last_written_ai_tweets(limit=5)
+            results["get_last_written_ai_tweets"] = len(last_ai_tweets)
+            print(f"Written AI tweets results: {ai_tweet_result}")
+
+            # Test 6: Database status
+            print("\nTesting database status...")
+            needs_update, current_tweets = db.check_database_status(user_id)
+            results["database_status"] = {
+                "needs_update": needs_update,
+                "current_tweets": len(current_tweets),
+            }
+            print(
+                f"Database status: Needs update={needs_update}, Current tweets={len(current_tweets)}"
+            )
+
+            # Test 7: Most recent tweet/mention IDs
+            print("\nTesting most recent IDs...")
+            recent_tweet_id = db.get_most_recent_tweet_id(user_id)
+            recent_mention_id = db.get_most_recent_mention_id(user_id)
+            results["most_recent_ids"] = {
+                "tweet": recent_tweet_id,
+                "mention": recent_mention_id,
+            }
+            print(f"Most recent tweet ID: {recent_tweet_id}")
+            print(f"Most recent mention ID: {recent_mention_id}")
+
+            print("\n=== Database Function Tests Completed ===\n")
+
+            return results
+
     except Exception as e:
-        print(f"Error cleaning mentions: {str(e)}")
+        print(f"Error during database testing: {e}")
+        return {"error": str(e)}
+
 
 if __name__ == "__main__":
-    try:
-        print("[ADMIN MODE] Starting database cleanup operation...")
-        
-        with MongoDBConnection() as db:
-            # Create backup first
-            backup_file = backup_database(db)
-            print(f"Backup created successfully at: {backup_file}")
-            
-            # Print initial stats
-            print("\nInitial database state:")
-            print_collection_stats(db)
-            
-            # Commenting out the deletion of mentions for safety
-            # print("\nDeleting existing mentions and related data...")
-            # delete_existing_mentions(db)
-            
-            # Perform schema cleanup
-            print("\nPerforming schema cleanup...")
-            cleanup_collections(db)
-            
-            # Print final stats
-            print("\nFinal database state:")
-            print_collection_stats(db)
-            
-            print("\nOperation completed successfully!")
-        
-    except Exception as e:
-        print(f"Operation failed: {e}")
+
+    #  trinity id 1869824037465051137
+    # Replace with actual user ID for testing
+    TEST_USER_ID = "1869824037465051137"
+    results = test_db_functions(TEST_USER_ID)
+    print("\nTest Results Summary:")
+    print(json.dumps(results, indent=2, default=str))
