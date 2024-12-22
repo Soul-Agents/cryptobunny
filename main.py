@@ -621,7 +621,7 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
             )
 
             is_mention = mention_info is not None
-            is_ai_tweet = db.is_ai_tweet(tweet_id)
+            is_ai_tweet = db.is_ai_tweet(USER_ID, tweet_id)
 
             # Validate reply conditions
             if is_ai_tweet and not is_mention:
