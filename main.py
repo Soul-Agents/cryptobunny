@@ -124,8 +124,7 @@ class PostTweetTool:
     name: str = "Post tweet"
     description: str = "Use this tool to post a new tweet to the timeline."
 
-    def __init__(self, user_id: str):
-        self.user_id = user_id
+    def __init__(self):
         self.api = tweepy.Client(
             bearer_token=BEARER_TOKEN,
             consumer_key=API_KEY,
@@ -149,7 +148,7 @@ class PostTweetTool:
 
             if response.data:
                 tweet_data = WrittenAITweet(
-                    user_id=self.user_id,
+                    user_id=USER_ID,
                     tweet_id=str(response.data["id"]),
                     text=response.data["text"],
                     edit_history_tweet_ids=response.data.get(
@@ -365,7 +364,7 @@ class ReadMentionsTool:
     def _run(self) -> list:
         try:
             with get_db() as db:
-                needs_update, current_mentions = db.check_mentions_status()
+                needs_update, current_mentions = db.check_mentions_status(USER_ID)
 
                 if not needs_update and current_mentions:
                     print("[Mentions] Using cached data - last update was recent")
@@ -401,7 +400,7 @@ class ReadMentionsTool:
                     ]
 
                 try:
-                    since_id = db.get_most_recent_mention_id()
+                    since_id = db.get_most_recent_mention_id(USER_ID)
                     print(f"[Mentions] Fetching new data since tweet ID: {since_id}")
 
                     response = self.api.get_users_mentions(
