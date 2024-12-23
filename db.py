@@ -91,21 +91,29 @@ class TweetDB:
             )  # Show partial URI
             raise
 
-    def get_last_written_ai_tweets(self, limit: int = 21) -> List[WrittenAITweet]:
+    def get_last_written_ai_tweets(
+        self, user_id: str, limit: int = 21
+    ) -> List[WrittenAITweet]:
         """Get the last N tweets written by AI"""
         try:
-            return list(self.written_ai_tweets.find().sort("saved_at", -1).limit(limit))
+            return list(
+                self.written_ai_tweets.find({"user_id": user_id})
+                .sort("saved_at", -1)
+                .limit(limit)
+            )
         except Exception as e:
             print(f"Error fetching last written AI tweets: {e}")
             return []
 
     def get_last_written_ai_tweet_replies(
-        self, limit: int = 21
+        self, user_id: str, limit: int = 21
     ) -> List[WrittenAITweetReply]:
         """Get the last N replies written by AI"""
         try:
             return list(
-                self.written_ai_tweets_replies.find().sort("saved_at", -1).limit(limit)
+                self.written_ai_tweets_replies.find({"user_id": user_id})
+                .sort("saved_at", -1)
+                .limit(limit)
             )
         except Exception as e:
             print(f"Error fetching last written AI tweet replies: {e}")
@@ -249,6 +257,7 @@ class TweetDB:
 
     def add_written_ai_tweet(self, user_id: str, tweet: WrittenAITweet) -> Dict:
         """Add a single written AI tweet to the database"""
+        print(f"Adding written AI tweet by user {user_id}")
         try:
             tweet["user_id"] = user_id  # Ensure user_id is set
             self.written_ai_tweets.update_one(
