@@ -161,9 +161,9 @@ class PostTweetTool:
                     replied_to=False,
                     replied_at=None,
                 )
-
+                print(f"Adding written AI tweet by user {USER_ID}")
                 with get_db() as db:
-                    db.add_written_ai_tweet(tweet_data)
+                    db.add_written_ai_tweet(USER_ID, tweet_data)
                 return {
                     "message": f"Posted tweet: {message}",
                     "data": tweet_data,
@@ -838,7 +838,7 @@ def run_crypto_agent(question: str):
 if __name__ == "__main__":
     try:
         question = QUESTION
-        response = run_crypto_agent(question)
+        response = run_crypto_agent("Write one tweet about the future of AI")
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
