@@ -111,10 +111,23 @@ class TweetDB:
             print(f"Error fetching last written AI tweet replies: {e}")
             return []
 
-    def add_written_ai_tweet_reply(self, original_tweet_id: str, reply: str) -> Dict:
-        """Add replies to a written AI tweet"""
+    def add_written_ai_tweet_reply(
+        self, user_id: str, original_tweet_id: str, reply: str
+    ) -> Dict:
+        """
+        Add a reply to an AI tweet to the database
+
+        Args:
+            user_id (str): The ID of the user making the reply
+            original_tweet_id (str): The ID of the tweet being replied to
+            reply (str): The content of the reply
+
+        Returns:
+            Dict: The result of the database operation
+        """
         try:
             reply_data = WrittenAITweetReply(
+                user_id=user_id,  # Add user_id to the reply data
                 tweet_id=original_tweet_id,
                 reply={"reply": reply},
                 public_metrics={},
@@ -124,7 +137,10 @@ class TweetDB:
             )
 
             self.written_ai_tweets_replies.update_one(
-                {"tweet_id": original_tweet_id},
+                {
+                    "user_id": user_id,
+                    "tweet_id": original_tweet_id,
+                },  # Add user_id to query
                 {"$set": reply_data},
                 upsert=True,
             )
