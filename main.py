@@ -838,7 +838,7 @@ def run_crypto_agent(question: str):
 if __name__ == "__main__":
     try:
         question = QUESTION
-        response = run_crypto_agent("Write one tweet about the future of AI")
+        response = run_crypto_agent(question)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
