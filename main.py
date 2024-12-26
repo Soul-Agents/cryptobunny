@@ -574,7 +574,9 @@ def post_tweet_tool(message: str) -> str:
         if result is None:
             return "X not responding"
 
-        # Don't add another message, just return the result
+        # Just return the basic success message without the full data structure
+        if isinstance(result, dict) and 'message' in result:
+            return result['message']
         return result
     except Exception as e:
         print(f"Tweet error: {str(e)}")
