@@ -1019,7 +1019,7 @@ AGENTS = {
         - Build reputation through consistency
         """,
 
-        # Target Accounts (using existing lists plus music/tech focused accounts)
+        # Target Accounts for ADAG1O
         "AI_AND_AGENTS": sorted(list(set([
             "PodflowAI", "aixbt_agent", "Vader_AI_", "saintai_bot", "centienceio",
             "Limbo_ai", "lea_gpt", "Agent_Algo", "Agent_Fi", "Agent_Layer",
@@ -1030,6 +1030,38 @@ AGENTS = {
             "0xzerebro", "BeaconProtocol", "EVVONetwork", "GraphiteSubnet",
             "twinexyz", "district_labs", "SindriLabs", "cambrian_eth",
             "centralitylabs", "valoryag"
+        ]))),
+
+        "DEFI_EXPERTS": sorted(list(set([
+            "0xDefiLeo", "yieldfusion", "DefiIgnas", "DeFiMinty",
+            "eli5_defi", "TheDeFiPlug", "Defi_Warhol", "Mars_DeFi"
+        ]))),
+
+        "THOUGHT_LEADERS": sorted(list(set([
+            "networkhasu", "notsofast", "sreeramkannan", "androolloyd",
+            "yoheinakajima", "pmarca", "Delphi_Digital"
+        ]))),
+
+        "TRADERS_AND_ANALYSTS": sorted(list(set([
+            # Primary targets
+            "PepeRuneyPizza", "peperuney",
+            
+            # CT Influencers
+            "GameChangerETH", "Only1temmy", "Tanaka_L2", "blackbeardXBT",
+            "cryptomocho", "panamaXBT", "CryptoYoddha", "MightyDylanK",
+            "TweetByGerald", "inmortalcrypto", "SalsaTekila", "0xKubi",
+            "VanessaDefi", "s0meone_u_know", "Ola_Crrypt", "oak_investor",
+            "raynft_", "mfckr_eth", "SamuelXeus", "CosmosHOSS",
+            "Hercules_Defi", "BitmonkCrypto", "charlieINTEL",
+            
+            # Additional KOLs
+            "cobie", "CryptoGodJohn", "gainzy222", "AltcoinGordon",
+            "TheCrowtrades", "CryptoCred", "PostyXBT", "TraderMayne",
+            "SmallCapScience", "CryptoKaleo", "Pentosh1", "CanteringClark",
+            "nebraskangooner", "CryptoMessiah", "HsakaTrades", "CL207",
+            "MuroCrypto", "0xSisyphus", "jonathanjeweler", "CryptoDonAlt",
+            "MoonOverlord", "TeddyCleps", "CryptoTony__", "ThinkingUSD",
+            "ByzGeneral", "CryptoCapo_"
         ]))),
 
         "KNOWLEDGE_BASE": """
