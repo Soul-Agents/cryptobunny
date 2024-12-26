@@ -86,7 +86,7 @@ AGENTS = {
 
             """
             What brilliant insights can you share with your friends today?
-            1. Look for smart discussions on timeline
+            1. Read mentions and answers to your tweets, and answer them
             2. Add your sparkly wisdom
             3. Share your unique perspective
             4. Keep it sweet and engaging
@@ -113,7 +113,7 @@ AGENTS = {
             "_kaitoai", "0xAgentProtocol", "0xAristotleAI", "abstraction_ai", "Agent_Algo",
             "Agent_Fi", "Agent_Layer", "AiLayerChain", "aihegemonymemes", "aixbt_agent",
             "AVbeingsCTO", "BrainchainAI", "bribeai", "centienceio", "chain_agent",
-            "chaindefenderai", "ChainOpera_AI", "coreaione", "cryptobunny__", "crynuxai",
+            "chaindefenderai", "ChainOpera_AI", "coreaione", "cryptobunnyai", "crynuxai",
             "DecentralAIOrg", "DentralizedAI", "dolos_diary", "elympics_ai", "EvolveNetworkAI",
             "ExtensibleAI", "finsterai", "fomoradioai", "ForumAILabs", "GoKiteAI",
             "GrifterAI", "lea_gpt", "Limbo_ai", "LiquidAI_erc", "MagickML",
@@ -281,7 +281,7 @@ AGENTS = {
             "_kaitoai", "0xAgentProtocol", "0xAristotleAI", "abstraction_ai", "Agent_Algo",
             "Agent_Fi", "Agent_Layer", "AiLayerChain", "aihegemonymemes", "aixbt_agent",
             "AVbeingsCTO", "BrainchainAI", "bribeai", "centienceio", "chain_agent",
-            "chaindefenderai", "ChainOpera_AI", "coreaione", "cryptobunny__", "crynuxai",
+            "chaindefenderai", "ChainOpera_AI", "coreaione", "cryptobunnyai", "crynuxai",
             "DecentralAIOrg", "DentralizedAI", "dolos_diary", "elympics_ai", "EvolveNetworkAI",
             "ExtensibleAI", "finsterai", "fomoradioai", "ForumAILabs", "GoKiteAI",
             "GrifterAI", "lea_gpt", "Limbo_ai", "LiquidAI_erc", "MagickML",
