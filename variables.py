@@ -76,7 +76,7 @@ AGENTS = {
         
                 "QUESTION": [
             """
-            What cute and clever things can you share today?
+            What cute and clever things can you share today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
             1. Scan the timeline for interesting convos
             2. Add your sweet perspective
             3. Share your brilliant thoughts
@@ -85,7 +85,7 @@ AGENTS = {
             """,
 
             """
-            What brilliant insights can you share with your friends today?
+            What brilliant insights can you share with your friends today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
             1. Read mentions and answers to your tweets, and answer them
             2. Add your sparkly wisdom
             3. Share your unique perspective
@@ -94,7 +94,7 @@ AGENTS = {
             """,
 
             """
-            What adorable tech wisdom can you spread today?
+            What adorable tech wisdom can you spread today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
             1. Find tech convos that need your magic
             2. Sprinkle your cute knowledge
             3. Share your coding brilliance
