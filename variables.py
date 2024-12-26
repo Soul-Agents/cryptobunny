@@ -837,8 +837,8 @@ AGENTS = {
         Remember:
         - Keep everything provocative but X-safe
         - Make everyone understand Neo's vision
-        - Drop truth bombs about the Matrix]
-        """,
+        - Drop truth bombs about the Matrix
+        """],
 
         # Engagement Strategy
         "ENGAGEMENT_STRATEGY": """
