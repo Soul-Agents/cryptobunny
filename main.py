@@ -574,10 +574,10 @@ def post_tweet_tool(message: str) -> str:
         if result is None:
             return "X not responding"
 
-        # Just return the basic success message without the full data structure
-        if isinstance(result, dict) and 'message' in result:
-            return result['message']
-        return result
+        # Only return the success message
+        if isinstance(result, dict):
+            return result.get('message', 'Tweet posted')
+        return "Tweet posted"  # Fallback message
     except Exception as e:
         print(f"Tweet error: {str(e)}")
         return "Failed to send tweet"

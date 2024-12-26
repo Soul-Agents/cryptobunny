@@ -349,13 +349,11 @@ class TweetDB:
         return needs_update, current_tweets
 
     def close(self):
-        """Close MongoDB connection"""
-        if hasattr(self, 'client') and self.client:
+        """Close MongoDB connection if it's open and hasn't been closed yet"""
+        if hasattr(self, 'client') and self.client and not hasattr(self, '_closed'):
             self.client.close()
-            # Only print if we actually closed a connection
-            if not hasattr(self, '_connection_closed'):
-                print("MongoDB connection closed")
-                self._connection_closed = True
+            print("MongoDB connection closed")
+            self._closed = True
 
     def add_ai_mention_tweets(self, tweets: List[Dict]) -> Dict:
         """
@@ -623,3 +621,4 @@ class TweetDB:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+        # Don't print another message here
