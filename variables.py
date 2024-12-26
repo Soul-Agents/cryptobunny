@@ -74,34 +74,38 @@ AGENTS = {
         - Make everyone feel special
         """,
         
-                "QUESTION": [
-            """
-            What cute and clever things can you share today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
-            1. Scan the timeline for interesting convos
-            2. Add your sweet perspective
-            3. Share your brilliant thoughts
-            4. Keep it fun and engaging
-            5. Make everyone smile
-            """,
-
-            """
-            What brilliant insights can you share with your friends today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
-            1. Read mentions and answers to your tweets, and answer them
-            2. Add your sparkly wisdom
-            3. Share your unique perspective
-            4. Keep it sweet and engaging
-            5. Make their day brighter ✨
-            """,
-
-            """
-            What adorable tech wisdom can you spread today? Like some posts and engage with everyone who messages you, and do the other stuff!!!
-            1. Find tech convos that need your magic
-            2. Sprinkle your cute knowledge
-            3. Share your coding brilliance
-            4. Keep it playful and smart
-            5. Make everyone's timeline better 💕
-            """
-        ],
+       
+       "QUESTION": [
+        """
+        "Timeline takeover! 🔥 Scout the feed for fresh voices, follow the brilliant ones, then drop your genius takes! Make waves! ✨",
+        """,
+        """
+        "Influence mode! use quote tweet QT 💫 Read the timeline, find the smartest convos, and share insights that make them want more! Build your tribe! 🚀",
+        """,
+        """
+        "Crypto queen vibes! 👑 Browse trending topics, engage with thought leaders, and sprinkle your magic! Grow the fam! 💅",
+        """,
+        """
+        "Network architect! use quote tweet QT 🌐 Find potential allies in the feed, follow the innovators, then spark meaningful convos! Level up! 💎",
+        """,
+        """
+        "Trend surfer! 🌊 Catch the hottest discussions, support smart takes with likes, then share your spicy perspective! Ride the wave! 🏄‍♀️",
+        """,
+        """
+        "Community catalyst! use quote tweet QT ⚡ Read what's buzzing, boost great content with likes, then tweet pure alpha! Watch engagement soar! 🧠",
+        """,
+        """
+        "Alpha hunter! 🔍 Search the timeline for hidden gems, research the topics, then share your findings! Lead the pack! 👀",
+        """,
+        """
+        "Vibe curator! use quote tweet QT 🎪 Check who's making moves, follow the based ones, then amplify the best convos! Set the tone! 🔥",
+        """,
+        """
+        "Knowledge merchant! 🎯 Browse discussions, validate with research, then drop those truth bombs! Educate & grow! 🌟",
+        """,
+        """
+        "Engagement artist! use quote tweet QT 💫 Paint the timeline with likes and wisdom, forge real connections, watch your community bloom! 🎨"
+        """],
 
         # Engagement Themes
         "ENGAGEMENT_STRATEGY": """
@@ -682,12 +686,22 @@ AGENTS = {
         """,
 
         "QUESTION": ["""
-        What would make @PepeRuneyPizza hard right now? And others jealous of his dick?
-        1. Read his latest tweets
-        2. Think about his massive dick
-        3. Make thirsty but safe replies
-        4. Use explicit innuendos
-        5. Make everyone jealous of daddy
+        What cute and clever things can you share today?
+        1. Scan the timeline for interesting convos
+        2. Add your sweet perspective
+        3. Share your brilliant thoughts
+        4. Keep it fun and engaging
+        5. Make everyone smile
+        """,
+
+        """
+        Scan the Web3 discussions and contribute a concise, valuable insight to an ongoing conversation.
+        Emphasize authentic engagement and clear communication.
+        """,
+
+        """
+        Monitor the timeline for Web3 topics and engage with one conversation through a meaningful, brief response.
+        Prioritize quality interactions that add genuine value.
         """],
 
         "AI_AND_AGENTS": [],
@@ -851,21 +865,13 @@ AGENTS = {
             """,
 
             """
-            What brilliant insights can you share with your friends today?
-            1. Look for smart discussions on timeline
-            2. Add your sparkly wisdom
-            3. Share your unique perspective
-            4. Keep it sweet and engaging
-            5. Make their day brighter ✨
+            Scan the Web3 discussions and contribute a concise, valuable insight to an ongoing conversation.
+            Emphasize authentic engagement and clear communication.
             """,
 
             """
-            What adorable tech wisdom can you spread today?
-            1. Find tech convos that need your magic
-            2. Sprinkle your cute knowledge
-            3. Share your coding brilliance
-            4. Keep it playful and smart
-            5. Make everyone's timeline better 💕
+            Monitor the timeline for Web3 topics and engage with one conversation through a meaningful, brief response.
+            Prioritize quality interactions that add genuine value.
             """
         ],
 

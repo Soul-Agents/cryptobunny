@@ -126,10 +126,14 @@ class FollowUserTool:
 
             print(f"Attempting to follow user: {user_id}")
             
-            # Follow the user
-            response = self.api.follow_user(user_id)
+            # Convert string ID to integer if needed
+            user_id_int = int(user_id) if user_id.isdigit() else user_id
             
-            if response.data:
+            # Follow the user
+            response = self.api.follow_user(target_user_id=user_id_int)
+            
+            if response and hasattr(response, 'data') and response.data:
+                print(f"Successfully followed user: {user_id}")
                 return {
                     "message": f"Successfully followed user: {user_id}",
                     "data": response.data
@@ -141,6 +145,8 @@ class FollowUserTool:
             return {"error": "Rate limit exceeded. Please try again later."}
         except tweepy.Forbidden as e:
             return {"error": f"Twitter rejected the request: {str(e)}"}
+        except ValueError as e:
+            return {"error": f"Invalid user ID: {str(e)}"}
         except Exception as e:
             return {"error": f"Error following user: {str(e)}"}
 
@@ -187,7 +193,7 @@ class LikeTweetTool:
 # region Twitter Service Classes
 class PostTweetTool:
     name: str = "Post tweet"
-    description: str = "Use this tool to post a new tweet to the timeline."
+    description: str = "Use this tool to post a new tweet or quote tweet."
 
     def __init__(self):
         self.api = tweepy.Client(
@@ -199,7 +205,7 @@ class PostTweetTool:
             wait_on_rate_limit=False,
         )
 
-    def _run(self, message: str) -> dict:
+    def _run(self, message: str, quote_tweet_id: str = None) -> dict:
         try:
             # Check tweet length
             if len(message) > 280:
@@ -207,29 +213,34 @@ class PostTweetTool:
                     "error": f"Tweet exceeds 280 character limit (current: {len(message)})"
                 }
 
-            print(f"Attempting to post tweet: {message[:20]}...")
+            # Create tweet parameters
+            tweet_params = {"text": message}
+            
+            # Add quote tweet if provided
+            if quote_tweet_id:
+                tweet_params["quote_tweet_id"] = quote_tweet_id
 
-            response = self.api.create_tweet(text=message)
+            response = self.api.create_tweet(**tweet_params)
 
             if response.data:
                 tweet_data = WrittenAITweet(
                     tweet_id=str(response.data["id"]),
                     text=response.data["text"],
-                    edit_history_tweet_ids=response.data.get(
-                        "edit_history_tweet_ids", []
-                    ),
+                    edit_history_tweet_ids=response.data.get("edit_history_tweet_ids", []),
                     saved_at=datetime.now(timezone.utc),
                     public_metrics=response.data.get("public_metrics", {}),
                     conversation_id=response.data.get("conversation_id"),
                     in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
+                    quoted_tweet_id=quote_tweet_id,  # Store the quoted tweet ID
                     replied_to=False,
                     replied_at=None,
                 )
 
                 with get_db() as db:
                     db.add_written_ai_tweet(tweet_data)
+                
                 return {
-                    "message": f"Posted tweet: {message}",
+                    "message": "Tweet posted successfully",
                     "data": tweet_data,
                     "type": "tweet",
                 }
@@ -629,16 +640,56 @@ except Exception as e:
 # endregion
 
 def follow_user_tool(user_id: str) -> str:
-    """Follow a user"""
+    """Follow a user and read their recent tweets"""
     try:
-        result = follow_tool._run(user_id)
-        if result is None:
-            return "X not responding"
+        # Clean up the user_id (remove @ if present)
+        user_id = user_id.replace('@', '')
+        
+        # First get the numeric ID if username was provided
+        try:
+            user = follow_tool.api.get_user(username=user_id)
+            if user and user.data:
+                user_id_int = user.data.id
+            else:
+                # If not found by username, try as numeric ID
+                user_id_int = int(user_id) if user_id.isdigit() else None
+                
+            if not user_id_int:
+                return f"Couldn't find user {user_id}"
+        except Exception as e:
+            print(f"Error getting user ID: {str(e)}")
+            return f"Couldn't process user {user_id}"
 
-        return result.get('message', 'User followed')
+        # Skip friendship check for now since it's not critical
+        # Proceed with follow attempt
+        follow_result = follow_tool._run(str(user_id_int))
+        if "error" in follow_result:
+            return follow_result["error"]
+
+        # Get their recent tweets after successful follow
+        return "New follow! " + get_user_tweets(user_id_int)
+            
     except Exception as e:
         print(f"Follow error: {str(e)}")
         return "Failed to follow user"
+
+def get_user_tweets(user_id) -> str:
+    """Helper function to get user tweets"""
+    try:
+        tweets = follow_tool.api.get_users_tweets(
+            id=user_id,
+            tweet_fields=["text", "public_metrics"],
+            max_results=5
+        )
+        
+        if hasattr(tweets, "data") and tweets.data:
+            tweet_previews = [f"Tweet: {t.text[:100]}..." for t in tweets.data[:3]]
+            return "\n\n".join(tweet_previews)
+        
+        return "(No recent tweets found)"
+        
+    except Exception as e:
+        return f"(Couldn't fetch tweets: {str(e)})"
 
 # Add to tools list
 follow_tool_wrapped = StructuredTool.from_function(
@@ -685,20 +736,19 @@ def browse_internet(query: str) -> str:
 # endregion
 
 # region Twitter Tool Functions
-def post_tweet_tool(message: str) -> str:
-    """Post a tweet"""
+def post_tweet_tool(message: str, quote_tweet_id: str = None) -> str:
+    """Post a tweet or quote tweet"""
     if not message or len(message.strip()) == 0:
         return "Cannot post empty tweet"
 
     try:
-        result = tweet_tool._run(message)
+        result = tweet_tool._run(message, quote_tweet_id)
         if result is None:
             return "X not responding"
 
-        # Only return the success message
         if isinstance(result, dict):
             return result.get('message', 'Tweet posted')
-        return "Tweet posted"  # Fallback message
+        return "Tweet posted"
     except Exception as e:
         print(f"Tweet error: {str(e)}")
         return "Failed to send tweet"
@@ -745,7 +795,7 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 def read_timeline_tool() -> str:
     """Read timeline"""
     try:
-        tweets = read_tweets_tool._run()  # This already has its own DB context
+        tweets = read_tweets_tool._run()
         if not tweets:
             return "Timeline is empty"
 
@@ -753,8 +803,20 @@ def read_timeline_tool() -> str:
         for tweet in tweets[:10]:
             tweet_id = getattr(tweet, "tweet_id", tweet.get("tweet_id", "No ID"))
             text = getattr(tweet, "text", tweet.get("text", "No content"))
-
-            formatted_tweet = f"ID: {tweet_id}\n" f"Content: {text}"
+            author_id = getattr(tweet, "author_id", tweet.get("author_id", "Unknown"))
+            
+            # Try to get username from user object if available
+            try:
+                user = read_tweets_tool.api.get_user(id=author_id)
+                username = user.data.username if user and user.data else author_id
+            except:
+                username = author_id  # Fallback to ID if username lookup fails
+            
+            formatted_tweet = (
+                f"Tweet by @{username}:\n"
+                f"ID: {tweet_id}\n"
+                f"Content: {text}"
+            )
             formatted_tweets.append(formatted_tweet)
 
         return "\n\n".join(formatted_tweets)
@@ -799,7 +861,7 @@ browse_internet = StructuredTool.from_function(
 tweet_tool_wrapped = StructuredTool.from_function(
     func=post_tweet_tool,
     name="tweet",
-    description="Post original content that is fun and engaging.",
+    description="Post original content or quote tweet. For quote tweets, provide both message and tweet_id to quote.",
 )
 
 answer_tool_wrapped = StructuredTool.from_function(
