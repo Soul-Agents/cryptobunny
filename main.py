@@ -104,6 +104,86 @@ docsearch = PineconeVectorStore(
 retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
 #endregion
 
+class FollowUserTool:
+    name: str = "Follow user"
+    description: str = "Follow a user on X"
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, user_id: str) -> dict:
+        try:
+            # Validate user_id
+            if not user_id or not isinstance(user_id, str):
+                return {"error": f"Invalid user ID format: {user_id}"}
+
+            print(f"Attempting to follow user: {user_id}")
+            
+            # Follow the user
+            response = self.api.follow_user(user_id)
+            
+            if response.data:
+                return {
+                    "message": f"Successfully followed user: {user_id}",
+                    "data": response.data
+                }
+            
+            return {"error": "Failed to follow user: No response data"}
+
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
+        except Exception as e:
+            return {"error": f"Error following user: {str(e)}"}
+
+class LikeTweetTool:
+    name: str = "Like tweet"
+    description: str = "Like a tweet to show appreciation"
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, tweet_id: str) -> dict:
+        try:
+            # Validate tweet_id
+            if not tweet_id or not isinstance(tweet_id, str):
+                return {"error": f"Invalid tweet ID format: {tweet_id}"}
+
+            print(f"Attempting to like tweet: {tweet_id}")
+            
+            # Like the tweet
+            response = self.api.like(tweet_id)
+            
+            if response.data:
+                return {
+                    "message": f"Successfully liked tweet: {tweet_id}",
+                    "data": response.data
+                }
+            
+            return {"error": "Failed to like tweet: No response data"}
+
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
+        except Exception as e:
+            return {"error": f"Error liking tweet: {str(e)}"}
+
 # region Twitter Service Classes
 class PostTweetTool:
     name: str = "Post tweet"
@@ -470,7 +550,9 @@ class ReadMentionsTool:
 try:
     tweet_tool = PostTweetTool()
     answer_tool = AnswerTweetTool()
+    follow_tool = FollowUserTool()
     read_tweets_tool = ReadTweetsTool()
+    like_tool = LikeTweetTool()
     mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
         max_results=3,
@@ -545,6 +627,45 @@ except Exception as e:
     print(f"Error initializing tools: {str(e)}")
     raise  # Re-raise the exception since we can't continue without tools
 # endregion
+
+def follow_user_tool(user_id: str) -> str:
+    """Follow a user"""
+    try:
+        result = follow_tool._run(user_id)
+        if result is None:
+            return "X not responding"
+
+        return result.get('message', 'User followed')
+    except Exception as e:
+        print(f"Follow error: {str(e)}")
+        return "Failed to follow user"
+
+# Add to tools list
+follow_tool_wrapped = StructuredTool.from_function(
+    func=follow_user_tool,
+    name="follow",
+    description="Follow a user to expand your network and show support.",
+)
+
+def like_tweet_tool(tweet_id: str) -> str:
+    """Like a tweet"""
+    try:
+        result = like_tool._run(tweet_id)
+        if result is None:
+            return "X not responding"
+
+        return result.get('message', 'Tweet liked')
+    except Exception as e:
+        print(f"Like error: {str(e)}")
+        return "Failed to like tweet"
+
+# Add to tools list
+like_tool_wrapped = StructuredTool.from_function(
+    func=like_tweet_tool,
+    name="like",
+    description="Like a tweet to show appreciation and engagement.",
+)
+
 
 # region Tavily Tool Function
 def browse_internet(query: str) -> str:
@@ -709,7 +830,9 @@ tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
+    follow_tool_wrapped,
     retriever_tool,
+    like_tool_wrapped,
     read_tweets_tool_wrapped,
     read_mentions_tool_wrapped,
 ]
@@ -752,9 +875,11 @@ prompt = ChatPromptTemplate.from_messages([
        - browse_internet: Search recent news and discussions from websites
        - search_context: Query our internal knowledge base for relevant information
     
-    3. FINALLY Act (use ONE):
+    3. FINALLY Act (use as many as you want, be radical and fun and engaging):
        - tweet: Post a new tweet (max 280 characters)
        - answer: Reply to a specific tweet from step 1 (max 280 characters)
+       - like: Like a tweet from step 1 (do it for fun)
+       - follow: Follow a user from step 1 (cool or smart accounts only)
 
     Rules:
     - Must complete all three steps in order
@@ -796,7 +921,12 @@ def run_crypto_agent(question: str):
             return agent_executor.invoke({
                 "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
             })
+        
+        # Clean up the output by only returning the 'output' field
+        if isinstance(response, dict) and 'output' in response:
+            return response['output']
         return response
+        
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
         return {"error": str(e)}
