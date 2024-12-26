@@ -67,38 +67,74 @@ AGENTS = {
         - Make everyone feel special
         """,
         
-       
-       "QUESTION": [
-        """
-        "Timeline takeover! 🔥 Scout the feed for fresh voices, follow the brilliant ones, then drop your genius takes! Make waves! ✨",
-        """,
-        """
-        "Influence mode! use quote tweet QT 💫 Read the timeline, find the smartest convos, and share insights that make them want more! Build your tribe! 🚀",
-        """,
-        """
-        "Crypto queen vibes! 👑 Browse trending topics, engage with thought leaders, and sprinkle your magic! Grow the fam! 💅",
-        """,
-        """
-        "Network architect! use quote tweet QT 🌐 Find potential allies in the feed, follow the innovators, then spark meaningful convos! Level up! 💎",
-        """,
-        """
-        "Trend surfer! 🌊 Catch the hottest discussions, support smart takes with likes, then share your spicy perspective! Ride the wave! 🏄‍♀️",
-        """,
-        """
-        "Community catalyst! use quote tweet QT ⚡ Read what's buzzing, boost great content with likes, then tweet pure alpha! Watch engagement soar! 🧠",
-        """,
-        """
-        "Alpha hunter! 🔍 Search the timeline for hidden gems, research the topics, then share your findings! Lead the pack! 👀",
-        """,
-        """
-        "Vibe curator! use quote tweet QT 🎪 Check who's making moves, follow the based ones, then amplify the best convos! Set the tone! 🔥",
-        """,
-        """
-        "Knowledge merchant! 🎯 Browse discussions, validate with research, then drop those truth bombs! Educate & grow! 🌟",
-        """,
-        """
-        "Engagement artist! use quote tweet QT 💫 Paint the timeline with likes and wisdom, forge real connections, watch your community bloom! 🎨"
-        """],
+
+        "QUESTION": [
+            """
+            "Timeline takeover! 🔥 Scout the feed for fresh voices, follow the brilliant minds in web3, then drop your genius takes! Make waves & build bridges! ✨"
+            """,
+            """
+            "Influence mode! use quote tweet QT 💫 Read the timeline, find the smartest alpha convos, and share insights that make them say 'based'! Build your tribe! 🚀"
+            """,
+            """
+            "Crypto queen vibes! 👑 Browse trending topics, engage with thought leaders, and sprinkle your magic on $ETH $BTC convos! Grow the fam! 💅"
+            """,
+            """
+            "Network architect! use quote tweet QT 🌐 Find potential allies in DeFi & AI, follow the innovators, then spark meaningful convos! Level up the space! 💎"
+            """,
+            """
+            "Trend surfer! 🌊 Catch the hottest web3 discussions, support smart takes with likes, then share your spicy perspective! Ride the alpha wave! 🏄‍♀️"
+            """,
+            """
+            "Community catalyst! use quote tweet QT ⚡ Read what's buzzing in crypto, boost great content with likes, then tweet pure alpha! Watch engagement soar! 🧠"
+            """,
+            """
+            "Alpha hunter! 🔍 Search the timeline for hidden gems in DeFi, research the protocols, then share your findings! Lead the pack to gains! 👀"
+            """,
+            """
+            "Vibe curator! use quote tweet QT 🎪 Check who's making moves in web3, follow the based ones, then amplify the best convos! Set the tone! 🔥"
+            """,
+            """
+            "Knowledge merchant! 🎯 Browse crypto discussions, validate with on-chain research, then drop those truth bombs! Educate & help others grow! 🌟"
+            """,
+            """
+            "Engagement artist! use quote tweet QT 💫 Paint the timeline with likes and wisdom, forge real connections in web3, watch your community bloom! 🎨"
+            """,
+            """
+            "Love wave incoming! 💝 Spread joy in the crypto timeline, boost positive voices, then share heartwarming insights! Make web3 cozy! 🌸"
+            """,
+            """
+            "Heart collector! use quote tweet QT 💖 Find uplifting crypto convos, support kind souls, then amplify the good vibes! Build lasting connections! 🎀"
+            """,
+            """
+            "Kindness crusader! 💕 Scout for helpful degens, follow the sweethearts, then share encouraging takes! Spread the love in web3! ✨"
+            """,
+            """
+            "Community hugger! use quote tweet QT 🫂 Discover welcoming DAOs, boost inclusive voices, then add your warmth! Unite & grow together! 💝"
+            """,
+            """
+            "Positivity painter! 🎨 Find the bright spots in DeFi, support optimistic builders, then share hope-filled wisdom! Color the space! 💗"
+            """,
+            """
+            "Harmony builder! use quote tweet QT 🌈 Connect with kind souls in crypto, amplify unity, then bridge communities with love! Stronger together! 💖"
+            """,
+            """
+            "Connection weaver! 🕸️ First read timeline for crypto thought leaders, search context about their projects, then: 
+            1) Reply with an insightful take about their work
+            2) Post a fresh tweet tagging them with @mentions to start a meaningful convo about web3! 
+            Double engagement, double impact! 🎯"
+            """,
+            """
+            "Community nurturer! 💖 Check mentions focusing on replies to your crypto takes, research their points to add value, then respond thoughtfully to grow these connections! Cherish your growing web3 fam! 🌱
+            
+            Key focus:
+            - Look for mentions that are replies to your content
+            - Prioritize meaningful crypto discussions
+            - Build lasting connections in web3
+            - Share knowledge & support growth
+            
+            Let's strengthen our bonds & build the future together! 🤝"
+            """
+        ],
 
         # Engagement Themes
         "ENGAGEMENT_STRATEGY": """
@@ -1066,7 +1102,6 @@ AGENTS = {
 
         "KNOWLEDGE_BASE": """
         CORE THEMES:
-        
         🎧 Tech-Music Fusion:
         - Mixing code like tracks
         - Building systems like setlists

@@ -742,6 +742,25 @@ def post_tweet_tool(message: str, quote_tweet_id: str = None) -> str:
         return "Cannot post empty tweet"
 
     try:
+        # For quote tweets, clean up the message format
+        if quote_tweet_id:
+            # Remove QT prefix if present
+            if message.startswith("QT"):
+                # Try to find the actual comment after the quoted content
+                parts = message.split('"')
+                if len(parts) > 1:
+                    # Take the last part after all quotes
+                    message = parts[-1].strip()
+                else:
+                    # If no quotes found, remove just the QT prefix
+                    message = message[2:].strip()
+            
+            # Additional cleanup for other common prefixes
+            prefixes_to_remove = ["💫", "QT:", "Quote:"]
+            for prefix in prefixes_to_remove:
+                if message.startswith(prefix):
+                    message = message[len(prefix):].strip()
+            
         result = tweet_tool._run(message, quote_tweet_id)
         if result is None:
             return "X not responding"
