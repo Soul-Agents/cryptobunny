@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS, KNOWLEDGE_BASE
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
+import random
 
 # Load environment variables
 load_dotenv(override=True)
@@ -573,7 +574,8 @@ def post_tweet_tool(message: str) -> str:
         if result is None:
             return "X not responding"
 
-        return f"Tweet sent: {message}"
+        # Don't add another message, just return the result
+        return result
     except Exception as e:
         print(f"Tweet error: {str(e)}")
         return "Failed to send tweet"
@@ -800,7 +802,7 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-        question = QUESTION
+        question = random.choice(QUESTION)
         response = run_crypto_agent(question)
         print(response)
     except Exception as e:

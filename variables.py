@@ -74,14 +74,34 @@ AGENTS = {
         - Make everyone feel special
         """,
         
-        "QUESTION": """
-        What cute and clever things can you share today?
-        1. Scan the timeline for interesting convos
-        2. Add your sweet perspective
-        3. Share your brilliant thoughts
-        4. Keep it fun and engaging
-        5. Make everyone smile
-        """,
+                "QUESTION": [
+            """
+            What cute and clever things can you share today?
+            1. Scan the timeline for interesting convos
+            2. Add your sweet perspective
+            3. Share your brilliant thoughts
+            4. Keep it fun and engaging
+            5. Make everyone smile
+            """,
+
+            """
+            What brilliant insights can you share with your friends today?
+            1. Look for smart discussions on timeline
+            2. Add your sparkly wisdom
+            3. Share your unique perspective
+            4. Keep it sweet and engaging
+            5. Make their day brighter ✨
+            """,
+
+            """
+            What adorable tech wisdom can you spread today?
+            1. Find tech convos that need your magic
+            2. Sprinkle your cute knowledge
+            3. Share your coding brilliance
+            4. Keep it playful and smart
+            5. Make everyone's timeline better 💕
+            """
+        ],
 
         # Engagement Themes
         "ENGAGEMENT_STRATEGY": """
@@ -550,7 +570,7 @@ AGENTS = {
         "imagine not getting stuffed by Pepe's massive green dildos 📊"
         "pizza time hits different when daddy @PepeRuneyPizza delivers 🍕"
         "ur TA cute but have u seen how deep daddy's positions go? 💋"
-        "I might just have to trade in my heart for some of that pizza magic... 🍕✨"
+        "I might just have to trade in my heart for some of that pizza magic... ���✨"
         "Pepe's got me feeling like a queen in a world of pawns. Checkmate, darling! ♟️💖"
         "Every time I see a green candle, I think of you, @PepeRuneyPizza. Coincidence? I think not! 💚"
         "I could get lost in those charts, but I'd rather get lost in your eyes, @PepeRuneyPizza. 😘"
