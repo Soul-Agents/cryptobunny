@@ -569,9 +569,12 @@ class TweetDB:
         """
         try:
             most_recent = self.ai_mention_tweets.find_one(
-                {}, sort=[("tweet_id", -1)]  # Sort by tweet_id in descending order
+                {
+                    "tweet_id": {"$exists": True, "$regex": "^[0-9]+$"}  # Only numeric IDs
+                },
+                sort=[("created_at", -1)]
             )
-            return most_recent["tweet_id"] if most_recent else None
+            return str(most_recent["tweet_id"]) if most_recent else None
         except Exception as e:
             print(f"Error fetching most recent mention ID: {e}")
             return None
