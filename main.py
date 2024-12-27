@@ -46,7 +46,6 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
-USER_ID = os.getenv("USER_ID")
 
 # endregion
 
@@ -63,7 +62,6 @@ def verify_env_vars():
         "API_KEY_OPENAI",
         "MONGODB_URI",
         "MONGODB_URL",
-        "USER_ID",
     ]
 
     missing_vars = []
