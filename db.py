@@ -457,10 +457,12 @@ class TweetDB:
         return needs_update, current_tweets
 
     def close(self):
-        """Close MongoDB connection"""
-        if hasattr(self, "client"):
+        """Close MongoDB connection if it's open and hasn't been closed yet"""
+        if hasattr(self, "client") and self.client and not hasattr(self, "_closed"):
             self.client.close()
-            print("MongoDB connection closed")
+            # Remove or comment out this print statement since the context manager will handle it
+            # print("MongoDB connection closed")
+            self._closed = True
 
     def add_ai_mention_tweets(self, user_id: str, tweets: List[Dict]) -> Dict:
         """
@@ -706,9 +708,15 @@ class TweetDB:
         """Get the most recent mention ID for a specific user"""
         try:
             most_recent = self.ai_mention_tweets.find_one(
-                {"user_id": user_id}, sort=[("created_at", -1)]
+                {
+                    "tweet_id": {
+                        "$exists": True,
+                        "$regex": "^[0-9]+$",
+                    }  # Only numeric IDs
+                },
+                sort=[("created_at", -1)],
             )
-            return most_recent["tweet_id"] if most_recent else None
+            return str(most_recent["tweet_id"]) if most_recent else None
         except Exception as e:
             print(f"Error fetching most recent mention ID: {e}")
             return None
@@ -804,3 +812,4 @@ class TweetDB:
         except Exception as e:
             print(f"Error checking if tweet is replied: {e}")
             return False
+        print("MongoDB connection closed")  # Keep only this print statement

@@ -30,6 +30,7 @@ from variables import (
 )
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
+import random
 
 # Load environment variables
 load_dotenv(override=True)
@@ -119,10 +120,9 @@ retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k":
 # endregion
 
 
-# region Twitter Service Classes
-class PostTweetTool:
-    name: str = "Post tweet"
-    description: str = "Use this tool to post a new tweet to the timeline."
+class FollowUserTool:
+    name: str = "Follow user"
+    description: str = "Follow a user on X"
 
     def __init__(self):
         self.api = tweepy.Client(
@@ -134,7 +134,96 @@ class PostTweetTool:
             wait_on_rate_limit=False,
         )
 
-    def _run(self, message: str) -> dict:
+    def _run(self, user_id: str) -> dict:
+        try:
+            # Validate user_id
+            if not user_id or not isinstance(user_id, str):
+                return {"error": f"Invalid user ID format: {user_id}"}
+
+            print(f"Attempting to follow user: {user_id}")
+
+            # Convert string ID to integer if needed
+            user_id_int = int(user_id) if user_id.isdigit() else user_id
+
+            # Follow the user
+            response = self.api.follow_user(target_user_id=user_id_int)
+
+            if response and hasattr(response, "data") and response.data:
+                print(f"Successfully followed user: {user_id}")
+                return {
+                    "message": f"Successfully followed user: {user_id}",
+                    "data": response.data,
+                }
+
+            return {"error": "Failed to follow user: No response data"}
+
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
+        except ValueError as e:
+            return {"error": f"Invalid user ID: {str(e)}"}
+        except Exception as e:
+            return {"error": f"Error following user: {str(e)}"}
+
+
+class LikeTweetTool:
+    name: str = "Like tweet"
+    description: str = "Like a tweet to show appreciation"
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, tweet_id: str) -> dict:
+        try:
+            # Validate tweet_id
+            if not tweet_id or not isinstance(tweet_id, str):
+                return {"error": f"Invalid tweet ID format: {tweet_id}"}
+
+            print(f"Attempting to like tweet: {tweet_id}")
+
+            # Like the tweet
+            response = self.api.like(tweet_id)
+
+            if response.data:
+                return {
+                    "message": f"Successfully liked tweet: {tweet_id}",
+                    "data": response.data,
+                }
+
+            return {"error": "Failed to like tweet: No response data"}
+
+        except tweepy.TooManyRequests:
+            return {"error": "Rate limit exceeded. Please try again later."}
+        except tweepy.Forbidden as e:
+            return {"error": f"Twitter rejected the request: {str(e)}"}
+        except Exception as e:
+            return {"error": f"Error liking tweet: {str(e)}"}
+
+
+# region Twitter Service Classes
+class PostTweetTool:
+    name: str = "Post tweet"
+    description: str = "Use this tool to post a new tweet or quote tweet."
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, message: str, quote_tweet_id: str = None) -> dict:
         try:
             # Check tweet length
             if len(message) > 280:
@@ -142,9 +231,14 @@ class PostTweetTool:
                     "error": f"Tweet exceeds 280 character limit (current: {len(message)})"
                 }
 
-            print(f"Attempting to post tweet: {message[:20]}...")
+            # Create tweet parameters
+            tweet_params = {"text": message}
 
-            response = self.api.create_tweet(text=message)
+            # Add quote tweet if provided
+            if quote_tweet_id:
+                tweet_params["quote_tweet_id"] = quote_tweet_id
+
+            response = self.api.create_tweet(**tweet_params)
 
             if response.data:
                 tweet_data = WrittenAITweet(
@@ -158,6 +252,7 @@ class PostTweetTool:
                     public_metrics=response.data.get("public_metrics", {}),
                     conversation_id=response.data.get("conversation_id"),
                     in_reply_to_user_id=response.data.get("in_reply_to_user_id"),
+                    quoted_tweet_id=quote_tweet_id,  # Store the quoted tweet ID
                     replied_to=False,
                     replied_at=None,
                 )
@@ -165,7 +260,7 @@ class PostTweetTool:
                 with get_db() as db:
                     db.add_written_ai_tweet(USER_ID, tweet_data)
                 return {
-                    "message": f"Posted tweet: {message}",
+                    "message": "Tweet posted successfully",
                     "data": tweet_data,
                     "type": "tweet",
                 }
@@ -349,6 +444,69 @@ class ReadTweetsTool:
         return self._run()
 
 
+class TwitterSearchTool:
+    name: str = "Search twitter"
+    description: str = "Search tweets for context or engagement opportunities"
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, query: str) -> str:
+        try:
+            # Clean and format the query
+            query = query.replace(" and ", " ").replace(
+                " AND ", " "
+            )  # Remove logical AND
+            query = query.replace(" or ", " OR ")  # Proper OR operator
+            query = query.strip()
+
+            # Add language filter for better results
+            formatted_query = f"{query} lang:en -is:retweet"
+
+            print(f"[Search] Executing query: {formatted_query}")
+
+            response = self.api.search_recent_tweets(
+                query=formatted_query,
+                max_results=10,
+                tweet_fields=["author_id", "created_at", "conversation_id"],
+                expansions=["author_id"],
+                user_fields=["username"],
+            )
+
+            if not response.data:
+                return "No relevant tweets found"
+
+            # Get user info
+            users = (
+                {user.id: user for user in response.includes["users"]}
+                if "users" in response.includes
+                else {}
+            )
+
+            # Format results
+            results = []
+            for tweet in response.data:
+                username = (
+                    users[tweet.author_id].username
+                    if tweet.author_id in users
+                    else "unknown"
+                )
+                results.append(f"ID: {tweet.id}\n" f"@{username}: {tweet.text}")
+
+            return "\n\n".join(results)
+
+        except Exception as e:
+            print(f"Search error: {str(e)}")
+            return f"Search failed: {str(e)}"
+
+
 class ReadMentionsTool:
     name: str = "Read mentions"
     description: str = "Read mentions to engage with the community"
@@ -496,7 +654,10 @@ class ReadMentionsTool:
 try:
     tweet_tool = PostTweetTool()
     answer_tool = AnswerTweetTool()
+    follow_tool = FollowUserTool()
     read_tweets_tool = ReadTweetsTool()
+    like_tool = LikeTweetTool()
+    search_tool = TwitterSearchTool()
     mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
         max_results=3,
@@ -573,6 +734,106 @@ except Exception as e:
 # endregion
 
 
+def search_twitter_tool(query: str) -> str:
+    """
+    Search Twitter for context or tweets to engage with.
+    Examples:
+    - "web3 gaming (context)" for research
+    - "$BTC thoughts" for engagement
+    """
+    search_tool = TwitterSearchTool()
+    return search_tool._run(query)
+
+
+# Add to tools list
+twitter_search = StructuredTool.from_function(
+    func=search_twitter_tool,
+    name="search_twitter",
+    description="Search Twitter for specific topics, cashtags, or conversations.",
+)
+
+
+def follow_user_tool(user_id: str) -> str:
+    """Follow a user and read their recent tweets"""
+    try:
+        # Clean up the user_id (remove @ if present)
+        user_id = user_id.replace("@", "")
+
+        # First get the numeric ID if username was provided
+        try:
+            user = follow_tool.api.get_user(username=user_id)
+            if user and user.data:
+                user_id_int = user.data.id
+            else:
+                # If not found by username, try as numeric ID
+                user_id_int = int(user_id) if user_id.isdigit() else None
+
+            if not user_id_int:
+                return f"Couldn't find user {user_id}"
+        except Exception as e:
+            print(f"Error getting user ID: {str(e)}")
+            return f"Couldn't process user {user_id}"
+
+        # Skip friendship check for now since it's not critical
+        # Proceed with follow attempt
+        follow_result = follow_tool._run(str(user_id_int))
+        if "error" in follow_result:
+            return follow_result["error"]
+
+        # Get their recent tweets after successful follow
+        return "New follow! " + get_user_tweets(user_id_int)
+
+    except Exception as e:
+        print(f"Follow error: {str(e)}")
+        return "Failed to follow user"
+
+
+def get_user_tweets(user_id) -> str:
+    """Helper function to get user tweets"""
+    try:
+        tweets = follow_tool.api.get_users_tweets(
+            id=user_id, tweet_fields=["text", "public_metrics"], max_results=5
+        )
+
+        if hasattr(tweets, "data") and tweets.data:
+            tweet_previews = [f"Tweet: {t.text[:100]}..." for t in tweets.data[:3]]
+            return "\n\n".join(tweet_previews)
+
+        return "(No recent tweets found)"
+
+    except Exception as e:
+        return f"(Couldn't fetch tweets: {str(e)})"
+
+
+# Add to tools list
+follow_tool_wrapped = StructuredTool.from_function(
+    func=follow_user_tool,
+    name="follow",
+    description="Follow a user to expand your network and show support.",
+)
+
+
+def like_tweet_tool(tweet_id: str) -> str:
+    """Like a tweet"""
+    try:
+        result = like_tool._run(tweet_id)
+        if result is None:
+            return "X not responding"
+
+        return result.get("message", "Tweet liked")
+    except Exception as e:
+        print(f"Like error: {str(e)}")
+        return "Failed to like tweet"
+
+
+# Add to tools list
+like_tool_wrapped = StructuredTool.from_function(
+    func=like_tweet_tool,
+    name="like",
+    description="Like a tweet to show appreciation and engagement.",
+)
+
+
 # region Tavily Tool Function
 def browse_internet(query: str) -> str:
     """Search the internet for updated information"""
@@ -593,17 +854,38 @@ def browse_internet(query: str) -> str:
 
 
 # region Twitter Tool Functions
-def post_tweet_tool(message: str) -> str:
-    """Post a tweet"""
+def post_tweet_tool(message: str, quote_tweet_id: str = None) -> str:
+    """Post a tweet or quote tweet"""
     if not message or len(message.strip()) == 0:
         return "Cannot post empty tweet"
 
     try:
-        result = tweet_tool._run(message)
+        # For quote tweets, clean up the message format
+        if quote_tweet_id:
+            # Remove QT prefix if present
+            if message.startswith("QT"):
+                # Try to find the actual comment after the quoted content
+                parts = message.split('"')
+                if len(parts) > 1:
+                    # Take the last part after all quotes
+                    message = parts[-1].strip()
+                else:
+                    # If no quotes found, remove just the QT prefix
+                    message = message[2:].strip()
+
+            # Additional cleanup for other common prefixes
+            prefixes_to_remove = ["💫", "QT:", "Quote:"]
+            for prefix in prefixes_to_remove:
+                if message.startswith(prefix):
+                    message = message[len(prefix) :].strip()
+
+        result = tweet_tool._run(message, quote_tweet_id)
         if result is None:
             return "X not responding"
 
-        return f"Tweet sent: {message}"
+        if isinstance(result, dict):
+            return result.get("message", "Tweet posted")
+        return "Tweet posted"
     except Exception as e:
         print(f"Tweet error: {str(e)}")
         return "Failed to send tweet"
@@ -661,7 +943,7 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 def read_timeline_tool() -> str:
     """Read timeline"""
     try:
-        tweets = read_tweets_tool._run()  # This already has its own DB context
+        tweets = read_tweets_tool._run()
         if not tweets:
             return "Timeline is empty"
 
@@ -669,8 +951,18 @@ def read_timeline_tool() -> str:
         for tweet in tweets[:10]:
             tweet_id = getattr(tweet, "tweet_id", tweet.get("tweet_id", "No ID"))
             text = getattr(tweet, "text", tweet.get("text", "No content"))
+            author_id = getattr(tweet, "author_id", tweet.get("author_id", "Unknown"))
 
-            formatted_tweet = f"ID: {tweet_id}\n" f"Content: {text}"
+            # Try to get username from user object if available
+            try:
+                user = read_tweets_tool.api.get_user(id=author_id)
+                username = user.data.username if user and user.data else author_id
+            except:
+                username = author_id  # Fallback to ID if username lookup fails
+
+            formatted_tweet = (
+                f"Tweet by @{username}:\n" f"ID: {tweet_id}\n" f"Content: {text}"
+            )
             formatted_tweets.append(formatted_tweet)
 
         return "\n\n".join(formatted_tweets)
@@ -716,7 +1008,7 @@ browse_internet = StructuredTool.from_function(
 tweet_tool_wrapped = StructuredTool.from_function(
     func=post_tweet_tool,
     name="tweet",
-    description="Post original content that is fun and engaging.",
+    description="Post original content or quote tweet. For quote tweets, provide both message and tweet_id to quote.",
 )
 
 answer_tool_wrapped = StructuredTool.from_function(
@@ -747,7 +1039,10 @@ tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
+    follow_tool_wrapped,
     retriever_tool,
+    twitter_search,
+    like_tool_wrapped,
     read_tweets_tool_wrapped,
     read_mentions_tool_wrapped,
 ]
@@ -783,17 +1078,20 @@ prompt = ChatPromptTemplate.from_messages(
     Strategy: {STRATEGY}
     
     REQUIRED THREE-STEP PROCESS (no exceptions):
-    1. FIRST Observe (use ONE):
+    1. FIRST Observe (use ONE or TWO):
        - read_timeline: Fetch and display the latest 10 tweets from your home timeline
        - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
+       - search_twitter: Search for specific topics or conversations (use this first)
     
     2. THEN Research (use ONE or BOTH):
        - browse_internet: Search recent news and discussions from websites
        - search_context: Query our internal knowledge base for relevant information
     
-    3. FINALLY Act (use ONE):
+    3. FINALLY Act (use as many as you want, be radical and fun and engaging):
        - tweet: Post a new tweet (max 280 characters)
        - answer: Reply to a specific tweet from step 1 (max 280 characters)
+       - like: Like a tweet from step 1 (do it for fun)
+       - follow: Follow a user from step 1 (cool or smart accounts only)
 
     Rules:
     - Must complete all three steps in order
@@ -843,7 +1141,12 @@ def run_crypto_agent(question: str):
                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
                 }
             )
+
+        # Clean up the output by only returning the 'output' field
+        if isinstance(response, dict) and "output" in response:
+            return response["output"]
         return response
+
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
         return {"error": str(e)}
@@ -851,13 +1154,8 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
-
-        # tweet_id_to_reply = "1871163636133343384"
-        # print("start")
-        # print(reply_to_tweet_tool(tweet_id_to_reply, "Hello", "Hello from the Matrix"))
-
-        question = QUESTION
-        response = run_crypto_agent("Reply to two tweets from the timeline")
+        question = random.choice(QUESTION)
+        response = run_crypto_agent(question)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
