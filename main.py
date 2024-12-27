@@ -417,6 +417,50 @@ class ReadTweetsTool:
     def _arun(self) -> list:
         return self._run()
 
+class TwitterSearchTool:
+    name: str = "Search twitter"
+    description: str = "Search tweets for context or engagement opportunities"
+
+    def __init__(self):
+        self.api = tweepy.Client(
+            bearer_token=BEARER_TOKEN,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET,
+            wait_on_rate_limit=False,
+        )
+
+    def _run(self, query: str) -> str:
+        try:
+            response = self.api.search_recent_tweets(
+                query=query,
+                max_results=10,
+                tweet_fields=["author_id", "created_at", "conversation_id"],
+                expansions=["author_id"],
+                user_fields=["username"]
+            )
+            
+            if not response.data:
+                return "No relevant tweets found"
+
+            # Get user info
+            users = {user.id: user for user in response.includes['users']} if 'users' in response.includes else {}
+            
+            # Format results
+            results = []
+            for tweet in response.data:
+                username = users[tweet.author_id].username if tweet.author_id in users else "unknown"
+                results.append(
+                    f"ID: {tweet.id}\n"
+                    f"@{username}: {tweet.text}"
+                )
+            
+            return "\n\n".join(results)
+
+        except Exception as e:
+            print(f"Search error: {str(e)}")
+            return "Search failed"
 
 class ReadMentionsTool:
     name: str = "Read mentions"
@@ -557,6 +601,7 @@ class ReadMentionsTool:
         return self._run()
 
 
+
 # region Tool Initialization
 try:
     tweet_tool = PostTweetTool()
@@ -564,6 +609,7 @@ try:
     follow_tool = FollowUserTool()
     read_tweets_tool = ReadTweetsTool()
     like_tool = LikeTweetTool()
+    search_tool = TwitterSearchTool()
     mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
         max_results=3,
@@ -638,6 +684,23 @@ except Exception as e:
     print(f"Error initializing tools: {str(e)}")
     raise  # Re-raise the exception since we can't continue without tools
 # endregion
+
+def search_twitter_tool(query: str) -> str:
+    """
+    Search Twitter for context or tweets to engage with.
+    Examples: 
+    - "web3 gaming (context)" for research
+    - "$BTC thoughts" for engagement
+    """
+    search_tool = TwitterSearchTool()
+    return search_tool._run(query)
+
+# Add to tools list
+twitter_search = StructuredTool.from_function(
+    func=search_twitter_tool,
+    name="search_twitter",
+    description="Search Twitter for specific topics, cashtags, or conversations. Examples: '$BTC', 'web3 gaming', 'AI agents'",
+)
 
 def follow_user_tool(user_id: str) -> str:
     """Follow a user and read their recent tweets"""
@@ -913,6 +976,7 @@ tools = [
     answer_tool_wrapped,
     follow_tool_wrapped,
     retriever_tool,
+    twitter_search,
     like_tool_wrapped,
     read_tweets_tool_wrapped,
     read_mentions_tool_wrapped,
@@ -948,9 +1012,10 @@ prompt = ChatPromptTemplate.from_messages([
     Strategy: {STRATEGY}
     
     REQUIRED THREE-STEP PROCESS (no exceptions):
-    1. FIRST Observe (use ONE):
+    1. FIRST Observe (use ONE or TWO):
        - read_timeline: Fetch and display the latest 10 tweets from your home timeline
        - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
+       - search_twitter: Search for specific topics or conversations (ALWAYS USE THIS FIRST)
     
     2. THEN Research (use ONE or BOTH):
        - browse_internet: Search recent news and discussions from websites
