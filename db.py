@@ -23,8 +23,8 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 
 class TweetDB:
     def __init__(self):
-        # Set update threshold to 1 minute for testing
-        self.update_threshold = timedelta(minutes=1)
+        # Change update threshold to 2 hours
+        self.update_threshold = timedelta(hours=2)
 
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
@@ -123,7 +123,7 @@ class TweetDB:
         self, user_id: str, original_tweet_id: str, reply: str
     ) -> Dict:
         """
-        Add a reply to an AI tweet to the database
+        Add a reply to an AI tweet to the database and mark the original tweet as replied
 
         Args:
             user_id (str): The ID of the user making the reply
@@ -135,7 +135,7 @@ class TweetDB:
         """
         try:
             reply_data = WrittenAITweetReply(
-                user_id=user_id,  # Add user_id to the reply data
+                user_id=user_id,
                 tweet_id=original_tweet_id,
                 reply={"reply": reply},
                 public_metrics={},
@@ -144,14 +144,41 @@ class TweetDB:
                 saved_at=datetime.now(timezone.utc),
             )
 
+            # Add the reply
             self.written_ai_tweets_replies.update_one(
                 {
                     "user_id": user_id,
                     "tweet_id": original_tweet_id,
-                },  # Add user_id to query
+                },
                 {"$set": reply_data},
                 upsert=True,
             )
+
+            # Mark the original tweet as replied in both collections
+            current_time = datetime.now(timezone.utc)
+
+            # Update in tweets collection
+            self.tweets.update_one(
+                {"user_id": user_id, "tweet_id": original_tweet_id},
+                {
+                    "$set": {
+                        "replied_to": True,
+                        "replied_at": current_time,
+                    }
+                },
+            )
+
+            # Update in mentions collection
+            self.ai_mention_tweets.update_one(
+                {"user_id": user_id, "tweet_id": original_tweet_id},
+                {
+                    "$set": {
+                        "replied_to": True,
+                        "replied_at": current_time,
+                    }
+                },
+            )
+
             return {"status": "Success"}
         except Exception as e:
             print(f"[DB] Error adding written AI tweet reply: {e}")
@@ -314,6 +341,7 @@ class TweetDB:
             most_recent = self.tweets.find_one(
                 {"user_id": user_id}, sort=[("created_at", -1)]
             )
+            print(f"Most recent tweet: {most_recent}")
             return most_recent["tweet_id"] if most_recent else None
         except Exception as e:
             print(f"Error fetching most recent tweet ID: {e}")
@@ -384,20 +412,47 @@ class TweetDB:
             return []
 
     def check_database_status(self, user_id: str) -> tuple[bool, list]:
-        """Check database status for a specific user"""
+        """
+        Check database status for a specific user. Returns needs_update=True only when
+        the most recent tweet is more than 2 hours old.
+
+        Args:
+            user_id (str): The user ID to check status for
+
+        Returns:
+            tuple[bool, list]: (needs_update, current_tweets)
+        """
         current_tweets = self.get_unreplied_tweets(user_id)
+        print(f"Current tweets: {current_tweets}")
 
         if not current_tweets:
             return True, []
 
-        most_recent_tweet = current_tweets[0]
+        most_recent_tweet = current_tweets[0]  # Since they're sorted by created_at
         most_recent_time = most_recent_tweet.get("created_at")
 
+        # Ensure both times are timezone-aware
+        current_time = datetime.now(timezone.utc)
+
+        # Convert most_recent_time to UTC if it's naive
         if most_recent_time.tzinfo is None:
             most_recent_time = most_recent_time.replace(tzinfo=timezone.utc)
 
-        time_since_update = datetime.now(timezone.utc) - most_recent_time
+        print(f"Current time: {current_time}")
+        print(f"Most recent time tweet was created: {most_recent_time}")
+
+        time_since_update = current_time - most_recent_time
         needs_update = time_since_update > self.update_threshold
+
+        print(f"Most recent tweet time: {most_recent_time}")
+        print(f"Time since update: {time_since_update}")
+        print(f"Needs update: {needs_update}")
+
+        if not needs_update:
+            print(
+                "\nThe tweets database is up to date. Due to Twitter API rate limits, "
+                "we only update tweets that are more than 2 hours old. Please try again later."
+            )
 
         return needs_update, current_tweets
 
@@ -570,14 +625,24 @@ class TweetDB:
             ai_reply = self.written_ai_tweets_replies.find_one(
                 {"user_id": user_id, "tweet_id": tweet_id}
             )
+
             return bool(ai_reply)
 
         except Exception as e:
             print(f"[DB] Error checking if tweet is from AI: {str(e)}")
             return False
 
-    def add_replied_mention(self, user_id: str, tweet_id: str) -> bool:
-        """Mark a mention as replied to for a specific user"""
+    def add_replied_mention(self, tweet_id: str, user_id: str) -> bool:
+        """
+        Mark a mention as replied to for a specific user
+
+        Args:
+            tweet_id (str): The ID of the tweet that was replied to
+            user_id (str): The user ID who made the reply
+
+        Returns:
+            bool: True if the update was successful, False otherwise
+        """
         try:
             result = self.ai_mention_tweets.update_one(
                 {"user_id": user_id, "tweet_id": tweet_id},
@@ -594,11 +659,20 @@ class TweetDB:
             print(f"[DB] Error marking mention as replied: {str(e)}")
             return False
 
-    def is_mention_replied(self, tweet_id: str) -> bool:
-        """Check if a mention has already been replied to"""
+    def is_mention_replied(self, tweet_id: str, user_id: str) -> bool:
+        """
+        Check if a mention has already been replied to by a specific user
+
+        Args:
+            tweet_id (str): The ID of the tweet to check
+            user_id (str): The user ID who might have replied
+
+        Returns:
+            bool: True if the mention has been replied to, False otherwise
+        """
         try:
             mention = self.ai_mention_tweets.find_one(
-                {"tweet_id": tweet_id, "replied_to": True}
+                {"user_id": user_id, "tweet_id": tweet_id, "replied_to": True}
             )
             return mention is not None
         except Exception as e:
@@ -639,8 +713,17 @@ class TweetDB:
             print(f"Error fetching most recent mention ID: {e}")
             return None
 
-    def add_mentions(self, mentions: List[Dict]) -> Dict:
-        """Add multiple mentions to the database"""
+    def add_mentions(self, mentions: List[Dict], user_id: str) -> Dict:
+        """
+        Add multiple mentions to the database for a specific user
+
+        Args:
+            mentions (List[Dict]): List of mentions to add
+            user_id (str): The user ID who owns these mentions
+
+        Returns:
+            Dict: Results of the operation with counts
+        """
         if not mentions:
             return {"added": 0, "duplicates": 0, "errors": 0}
 
@@ -650,6 +733,7 @@ class TweetDB:
             try:
                 # Ensure all required fields are present
                 mention = {
+                    "user_id": user_id,  # Add user_id to each mention
                     "tweet_id": str(
                         mention_data.get("id") or mention_data.get("tweet_id")
                     ),
@@ -664,7 +748,10 @@ class TweetDB:
                 # Only store if we have the minimum required data
                 if mention["tweet_id"] and mention["text"]:
                     self.ai_mention_tweets.update_one(
-                        {"tweet_id": mention["tweet_id"]},
+                        {
+                            "user_id": user_id,
+                            "tweet_id": mention["tweet_id"],
+                        },  # Add user_id to query
                         {"$set": mention},
                         upsert=True,
                     )
@@ -688,3 +775,32 @@ class TweetDB:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
+
+    def is_tweet_replied(self, user_id: str, tweet_id: str) -> bool:
+        """
+        Check if a tweet has already been replied to by a specific user
+
+        Args:
+            user_id (str): The user ID who might have replied
+            tweet_id (str): The ID of the tweet to check
+
+        Returns:
+            bool: True if the tweet has been replied to, False otherwise
+        """
+        try:
+            # Check in regular tweets
+            tweet = self.tweets.find_one(
+                {"user_id": user_id, "tweet_id": tweet_id, "replied_to": True}
+            )
+            if tweet:
+                return True
+
+            # Also check in mentions
+            mention = self.ai_mention_tweets.find_one(
+                {"user_id": user_id, "tweet_id": tweet_id, "replied_to": True}
+            )
+            return mention is not None
+
+        except Exception as e:
+            print(f"Error checking if tweet is replied: {e}")
+            return False

@@ -271,7 +271,6 @@ class ReadTweetsTool:
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
                     return current_tweets
-
                 try:
                     since_id = db.get_most_recent_tweet_id(USER_ID)
                     print(f"Fetching new tweets since ID: {since_id}")
@@ -293,7 +292,7 @@ class ReadTweetsTool:
                         user_fields=["username", "name"],
                         max_results=10,
                     )
-
+                    print(f"Response from timeline: {response.data}")
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
                             Tweet(
@@ -320,6 +319,10 @@ class ReadTweetsTool:
                                 replied_at=None,
                             )
                             for tweet in response.data
+                            if str(tweet.author_id) != USER_ID  # Re-enable this filter
+                            and not db.is_ai_tweet(
+                                USER_ID, str(tweet.id)
+                            )  # Add additional check
                         ]
 
                         db.add_tweets(
@@ -426,7 +429,7 @@ class ReadMentionsTool:
                         existing_tweet_ids = {
                             mention["tweet_id"]
                             for mention in db.ai_mention_tweets.find(
-                                {}, {"tweet_id": 1}
+                                {"user_id": USER_ID}, {"tweet_id": 1}
                             )
                         }
 
@@ -465,9 +468,9 @@ class ReadMentionsTool:
                         ]
 
                         if formatted_mentions:  # Only store if we have new mentions
-                            db.add_mentions(formatted_mentions)
+                            db.add_mentions(formatted_mentions, USER_ID)
                             print(
-                                f"Added {len(formatted_mentions)} new mentions to database"
+                                f"Added {len(formatted_mentions)} new mentions to database for user {USER_ID}"
                             )
                         return formatted_mentions
 
@@ -614,28 +617,39 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 
         # Single database connection for all operations
         with get_db() as db:
-            # Get mention info with one query instead of two separate queries
+            # First, check if this is our own tweet
+            if db.is_ai_tweet(USER_ID, tweet_id):
+                return "ERROR: Cannot reply to our own tweets"
+
+            # Then check if it's a mention
             mention_info = db.ai_mention_tweets.find_one(
-                {"tweet_id": tweet_id},
-                {"replied_to": 1},  # Only fetch the replied_to field
+                {"user_id": USER_ID, "tweet_id": tweet_id},
+                {"replied_to": 1, "author_id": 1},  # Also fetch author_id
             )
 
             is_mention = mention_info is not None
-            is_ai_tweet = db.is_ai_tweet(USER_ID, tweet_id)
 
-            # Validate reply conditions
-            if is_ai_tweet and not is_mention:
-                return "Cannot reply to own tweets (unless it's a mention)"
+            # Additional safety check for author_id
+            if is_mention:
+                author_id = mention_info.get("author_id")
+                if author_id == USER_ID:
+                    return "ERROR: Cannot reply to our own mentions"
+                if mention_info.get("replied_to", False):
+                    return "Already replied to this mention"
 
-            if is_mention and mention_info.get("replied_to", False):
-                return "Already replied to this mention"
+            # Check if we've already replied to this tweet
+            if db.is_tweet_replied(USER_ID, tweet_id):
+                return "Already replied to this tweet"
 
             # Send the reply
             result = answer_tool._run(tweet_id, tweet_text, message)
 
             # Update mention status if successful
-            if "error" not in result and is_mention:
-                db.add_replied_mention(tweet_id)
+            if "error" not in result:
+                if is_mention:
+                    db.add_replied_mention(tweet_id, USER_ID)
+                else:
+                    db.add_replied_tweet(USER_ID, tweet_id)
 
             return result.get("message", result.get("error", "Failed to send reply"))
 
@@ -837,8 +851,13 @@ def run_crypto_agent(question: str):
 
 if __name__ == "__main__":
     try:
+
+        # tweet_id_to_reply = "1871163636133343384"
+        # print("start")
+        # print(reply_to_tweet_tool(tweet_id_to_reply, "Hello", "Hello from the Matrix"))
+
         question = QUESTION
-        response = run_crypto_agent(question)
+        response = run_crypto_agent("Reply to two tweets from the timeline")
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
