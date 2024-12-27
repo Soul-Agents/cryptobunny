@@ -433,8 +433,18 @@ class TwitterSearchTool:
 
     def _run(self, query: str) -> str:
         try:
+            # Clean and format the query
+            query = query.replace(' and ', ' ').replace(' AND ', ' ')  # Remove logical AND
+            query = query.replace(' or ', ' OR ')  # Proper OR operator
+            query = query.strip()
+
+            # Add language filter for better results
+            formatted_query = f"{query} lang:en -is:retweet"
+
+            print(f"[Search] Executing query: {formatted_query}")
+
             response = self.api.search_recent_tweets(
-                query=query,
+                query=formatted_query,
                 max_results=10,
                 tweet_fields=["author_id", "created_at", "conversation_id"],
                 expansions=["author_id"],
@@ -460,7 +470,7 @@ class TwitterSearchTool:
 
         except Exception as e:
             print(f"Search error: {str(e)}")
-            return "Search failed"
+            return f"Search failed: {str(e)}"
 
 class ReadMentionsTool:
     name: str = "Read mentions"
