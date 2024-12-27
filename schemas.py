@@ -31,6 +31,7 @@ class WrittenAITweet(TypedDict):
     public_metrics: Optional[PublicMetrics]
     conversation_id: Optional[str]
     in_reply_to_user_id: Optional[str]
+    quoted_tweet_id: Optional[str]
     replied_to: Optional[bool]
     replied_at: Optional[datetime]
 
