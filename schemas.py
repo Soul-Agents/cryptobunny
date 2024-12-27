@@ -23,6 +23,7 @@ class Tweet(TypedDict):
 
 
 class WrittenAITweet(TypedDict):
+    user_id: str
     tweet_id: str
     edit_history_tweet_ids: List[str]
     saved_at: datetime
@@ -36,6 +37,7 @@ class WrittenAITweet(TypedDict):
 
 
 class WrittenAITweetReply(TypedDict):
+    user_id: str
     tweet_id: str
     reply: Dict[str, str]
     public_metrics: Optional[PublicMetrics]
@@ -45,9 +47,9 @@ class WrittenAITweetReply(TypedDict):
 
 
 class ReplyToAITweet(TypedDict):
+    user_id: str
     reply_id: str
     text: str
     created_at: datetime
-    author_id: str
     in_reply_to_tweet_id: str
     public_metrics: Optional[PublicMetrics]

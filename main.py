@@ -15,7 +15,19 @@ import os
 from db import TweetDB
 from db_utils import get_db
 from dotenv import load_dotenv
-from variables import USER_ID, FAMOUS_ACCOUNTS_STR, USER_NAME, USER_PERSONALITY, STRATEGY, REMEMBER, QUESTION, MISSION, STYLE_RULES, CONTENT_RESTRICTIONS, KNOWLEDGE_BASE
+from variables import (
+    USER_ID,
+    FAMOUS_ACCOUNTS_STR,
+    USER_NAME,
+    USER_PERSONALITY,
+    STRATEGY,
+    REMEMBER,
+    QUESTION,
+    MISSION,
+    STYLE_RULES,
+    CONTENT_RESTRICTIONS,
+    KNOWLEDGE_BASE,
+)
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
@@ -37,37 +49,40 @@ MONGODB_URL = os.getenv("MONGODB_URL")
 
 # endregion
 
+
 # Verify loaded variables
 def verify_env_vars():
     required_vars = [
-        'API_KEY',
-        'API_SECRET_KEY',
-        'BEARER_TOKEN',
-        'ACCESS_TOKEN',
-        'ACCESS_TOKEN_SECRET',
-        'TAVILY_API_KEY',
-        'API_KEY_OPENAI',
-        'MONGODB_URI',
-        'MONGODB_URL'
+        "API_KEY",
+        "API_SECRET_KEY",
+        "BEARER_TOKEN",
+        "ACCESS_TOKEN",
+        "ACCESS_TOKEN_SECRET",
+        "TAVILY_API_KEY",
+        "API_KEY_OPENAI",
+        "MONGODB_URI",
+        "MONGODB_URL",
     ]
-    
+
     missing_vars = []
     for var in required_vars:
         if not os.getenv(var):
             missing_vars.append(var)
-    
+
     if missing_vars:
         print("❌ Missing environment variables:")
         for var in missing_vars:
             print(f"  - {var}")
         return False
-    
+
     print("✅ All required environment variables are set")
     return True
+
 
 # Call this before initializing any clients
 if not verify_env_vars():
     raise EnvironmentError("Missing required environment variables")
+
 
 # region Database Configuration
 def get_db():
@@ -86,23 +101,22 @@ llm = ChatOpenAI(
     presence_penalty=0.8,
 )
 
-embeddings = OpenAIEmbeddings(
-    model="text-embedding-3-large",
-    api_key=API_KEY_OPENAI)
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
 # endregion
 
-#region Pinecone Configuration
+# region Pinecone Configuration
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index("soulsagent")
-#endregion
+# endregion
 
-#region INIT Pinecone vector db
+# region INIT Pinecone vector db
 docsearch = PineconeVectorStore(
     index=index,
     embedding=embeddings,
 )
 retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-#endregion
+# endregion
+
 
 class FollowUserTool:
     name: str = "Follow user"
@@ -125,20 +139,20 @@ class FollowUserTool:
                 return {"error": f"Invalid user ID format: {user_id}"}
 
             print(f"Attempting to follow user: {user_id}")
-            
+
             # Convert string ID to integer if needed
             user_id_int = int(user_id) if user_id.isdigit() else user_id
-            
+
             # Follow the user
             response = self.api.follow_user(target_user_id=user_id_int)
-            
-            if response and hasattr(response, 'data') and response.data:
+
+            if response and hasattr(response, "data") and response.data:
                 print(f"Successfully followed user: {user_id}")
                 return {
                     "message": f"Successfully followed user: {user_id}",
-                    "data": response.data
+                    "data": response.data,
                 }
-            
+
             return {"error": "Failed to follow user: No response data"}
 
         except tweepy.TooManyRequests:
@@ -149,6 +163,7 @@ class FollowUserTool:
             return {"error": f"Invalid user ID: {str(e)}"}
         except Exception as e:
             return {"error": f"Error following user: {str(e)}"}
+
 
 class LikeTweetTool:
     name: str = "Like tweet"
@@ -171,16 +186,16 @@ class LikeTweetTool:
                 return {"error": f"Invalid tweet ID format: {tweet_id}"}
 
             print(f"Attempting to like tweet: {tweet_id}")
-            
+
             # Like the tweet
             response = self.api.like(tweet_id)
-            
+
             if response.data:
                 return {
                     "message": f"Successfully liked tweet: {tweet_id}",
-                    "data": response.data
+                    "data": response.data,
                 }
-            
+
             return {"error": "Failed to like tweet: No response data"}
 
         except tweepy.TooManyRequests:
@@ -189,6 +204,7 @@ class LikeTweetTool:
             return {"error": f"Twitter rejected the request: {str(e)}"}
         except Exception as e:
             return {"error": f"Error liking tweet: {str(e)}"}
+
 
 # region Twitter Service Classes
 class PostTweetTool:
@@ -215,7 +231,7 @@ class PostTweetTool:
 
             # Create tweet parameters
             tweet_params = {"text": message}
-            
+
             # Add quote tweet if provided
             if quote_tweet_id:
                 tweet_params["quote_tweet_id"] = quote_tweet_id
@@ -224,9 +240,12 @@ class PostTweetTool:
 
             if response.data:
                 tweet_data = WrittenAITweet(
+                    user_id=USER_ID,
                     tweet_id=str(response.data["id"]),
                     text=response.data["text"],
-                    edit_history_tweet_ids=response.data.get("edit_history_tweet_ids", []),
+                    edit_history_tweet_ids=response.data.get(
+                        "edit_history_tweet_ids", []
+                    ),
                     saved_at=datetime.now(timezone.utc),
                     public_metrics=response.data.get("public_metrics", {}),
                     conversation_id=response.data.get("conversation_id"),
@@ -235,10 +254,9 @@ class PostTweetTool:
                     replied_to=False,
                     replied_at=None,
                 )
-
+                print(f"Adding written AI tweet by user {USER_ID}")
                 with get_db() as db:
-                    db.add_written_ai_tweet(tweet_data)
-                
+                    db.add_written_ai_tweet(USER_ID, tweet_data)
                 return {
                     "message": "Tweet posted successfully",
                     "data": tweet_data,
@@ -265,7 +283,6 @@ class AnswerTweetTool:
     name: str = "Answer tweet"
     description: str = "Reply to a specific tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
-    
 
     def __init__(self):
         # Initialize the Client for v2 endpoints with rate limit handling
@@ -293,6 +310,7 @@ class AnswerTweetTool:
 
             if response.data:
                 reply_data = WrittenAITweetReply(
+                    user_id=USER_ID,
                     tweet_id=str(response.data["id"]),
                     reply={"reply": message},
                     public_metrics=response.data.get("public_metrics", {}),
@@ -304,8 +322,7 @@ class AnswerTweetTool:
                 # Save reply to database with the correct parameters
                 with get_db() as db:
                     db.add_written_ai_tweet_reply(
-                        original_tweet_id=tweet_id,
-                        reply=message
+                        user_id=USER_ID, original_tweet_id=tweet_id, reply=message
                     )
 
                 return {
@@ -327,7 +344,9 @@ class AnswerTweetTool:
 class ReadTweetsTool:
     name: str = "Read tweets"
     description: str = "Read X timeline for insights"
+
     def __init__(self):
+
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -340,14 +359,13 @@ class ReadTweetsTool:
     def _run(self) -> list:
         try:
             with get_db() as db:  # Single database connection for all operations
-                needs_update, current_tweets = db.check_database_status()
+                needs_update, current_tweets = db.check_database_status(USER_ID)
 
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
                     return current_tweets
-
                 try:
-                    since_id = db.get_most_recent_tweet_id()
+                    since_id = db.get_most_recent_tweet_id(USER_ID)
                     print(f"Fetching new tweets since ID: {since_id}")
 
                     response = self.api.get_home_timeline(
@@ -367,7 +385,7 @@ class ReadTweetsTool:
                         user_fields=["username", "name"],
                         max_results=10,
                     )
-
+                    print(f"Response from timeline: {response.data}")
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
                             Tweet(
@@ -394,9 +412,15 @@ class ReadTweetsTool:
                                 replied_at=None,
                             )
                             for tweet in response.data
+                            if str(tweet.author_id) != USER_ID  # Re-enable this filter
+                            and not db.is_ai_tweet(
+                                USER_ID, str(tweet.id)
+                            )  # Add additional check
                         ]
 
-                        db.add_tweets(formatted_tweets)  # Using same connection
+                        db.add_tweets(
+                            USER_ID, formatted_tweets
+                        )  # Using same connection
                         print(f"Added {len(formatted_tweets)} new tweets to database")
                         return formatted_tweets
 
@@ -417,6 +441,7 @@ class ReadTweetsTool:
     def _arun(self) -> list:
         return self._run()
 
+
 class TwitterSearchTool:
     name: str = "Search twitter"
     description: str = "Search tweets for context or engagement opportunities"
@@ -434,8 +459,10 @@ class TwitterSearchTool:
     def _run(self, query: str) -> str:
         try:
             # Clean and format the query
-            query = query.replace(' and ', ' ').replace(' AND ', ' ')  # Remove logical AND
-            query = query.replace(' or ', ' OR ')  # Proper OR operator
+            query = query.replace(" and ", " ").replace(
+                " AND ", " "
+            )  # Remove logical AND
+            query = query.replace(" or ", " OR ")  # Proper OR operator
             query = query.strip()
 
             # Add language filter for better results
@@ -448,34 +475,44 @@ class TwitterSearchTool:
                 max_results=10,
                 tweet_fields=["author_id", "created_at", "conversation_id"],
                 expansions=["author_id"],
-                user_fields=["username"]
+                user_fields=["username"],
             )
-            
+
             if not response.data:
                 return "No relevant tweets found"
 
             # Get user info
-            users = {user.id: user for user in response.includes['users']} if 'users' in response.includes else {}
-            
+            users = (
+                {user.id: user for user in response.includes["users"]}
+                if "users" in response.includes
+                else {}
+            )
+
             # Format results
             results = []
             for tweet in response.data:
-                username = users[tweet.author_id].username if tweet.author_id in users else "unknown"
-                results.append(
-                    f"ID: {tweet.id}\n"
-                    f"@{username}: {tweet.text}"
+                username = (
+                    users[tweet.author_id].username
+                    if tweet.author_id in users
+                    else "unknown"
                 )
-            
+                results.append(f"ID: {tweet.id}\n" f"@{username}: {tweet.text}")
+
             return "\n\n".join(results)
 
         except Exception as e:
             print(f"Search error: {str(e)}")
             return f"Search failed: {str(e)}"
 
+
 class ReadMentionsTool:
     name: str = "Read mentions"
     description: str = "Read mentions to engage with the community"
-    def __init__(self):
+
+    def __init__(
+        self,
+    ):
+
         self.api = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET_KEY,
@@ -488,7 +525,7 @@ class ReadMentionsTool:
     def _run(self) -> list:
         try:
             with get_db() as db:
-                needs_update, current_mentions = db.check_mentions_status()
+                needs_update, current_mentions = db.check_mentions_status(USER_ID)
 
                 if not needs_update and current_mentions:
                     print("[Mentions] Using cached data - last update was recent")
@@ -524,7 +561,7 @@ class ReadMentionsTool:
                     ]
 
                 try:
-                    since_id = db.get_most_recent_mention_id()
+                    since_id = db.get_most_recent_mention_id(USER_ID)
                     print(f"[Mentions] Fetching new data since tweet ID: {since_id}")
 
                     response = self.api.get_users_mentions(
@@ -548,7 +585,7 @@ class ReadMentionsTool:
                         existing_tweet_ids = {
                             mention["tweet_id"]
                             for mention in db.ai_mention_tweets.find(
-                                {}, {"tweet_id": 1}
+                                {"user_id": USER_ID}, {"tweet_id": 1}
                             )
                         }
 
@@ -587,9 +624,9 @@ class ReadMentionsTool:
                         ]
 
                         if formatted_mentions:  # Only store if we have new mentions
-                            db.add_mentions(formatted_mentions)
+                            db.add_mentions(formatted_mentions, USER_ID)
                             print(
-                                f"Added {len(formatted_mentions)} new mentions to database"
+                                f"Added {len(formatted_mentions)} new mentions to database for user {USER_ID}"
                             )
                         return formatted_mentions
 
@@ -609,7 +646,6 @@ class ReadMentionsTool:
 
     def _arun(self) -> list:
         return self._run()
-
 
 
 # region Tool Initialization
@@ -695,15 +731,17 @@ except Exception as e:
     raise  # Re-raise the exception since we can't continue without tools
 # endregion
 
+
 def search_twitter_tool(query: str) -> str:
     """
     Search Twitter for context or tweets to engage with.
-    Examples: 
+    Examples:
     - "web3 gaming (context)" for research
     - "$BTC thoughts" for engagement
     """
     search_tool = TwitterSearchTool()
     return search_tool._run(query)
+
 
 # Add to tools list
 twitter_search = StructuredTool.from_function(
@@ -712,12 +750,13 @@ twitter_search = StructuredTool.from_function(
     description="Search Twitter for specific topics, cashtags, or conversations.",
 )
 
+
 def follow_user_tool(user_id: str) -> str:
     """Follow a user and read their recent tweets"""
     try:
         # Clean up the user_id (remove @ if present)
-        user_id = user_id.replace('@', '')
-        
+        user_id = user_id.replace("@", "")
+
         # First get the numeric ID if username was provided
         try:
             user = follow_tool.api.get_user(username=user_id)
@@ -726,7 +765,7 @@ def follow_user_tool(user_id: str) -> str:
             else:
                 # If not found by username, try as numeric ID
                 user_id_int = int(user_id) if user_id.isdigit() else None
-                
+
             if not user_id_int:
                 return f"Couldn't find user {user_id}"
         except Exception as e:
@@ -741,28 +780,28 @@ def follow_user_tool(user_id: str) -> str:
 
         # Get their recent tweets after successful follow
         return "New follow! " + get_user_tweets(user_id_int)
-            
+
     except Exception as e:
         print(f"Follow error: {str(e)}")
         return "Failed to follow user"
+
 
 def get_user_tweets(user_id) -> str:
     """Helper function to get user tweets"""
     try:
         tweets = follow_tool.api.get_users_tweets(
-            id=user_id,
-            tweet_fields=["text", "public_metrics"],
-            max_results=5
+            id=user_id, tweet_fields=["text", "public_metrics"], max_results=5
         )
-        
+
         if hasattr(tweets, "data") and tweets.data:
             tweet_previews = [f"Tweet: {t.text[:100]}..." for t in tweets.data[:3]]
             return "\n\n".join(tweet_previews)
-        
+
         return "(No recent tweets found)"
-        
+
     except Exception as e:
         return f"(Couldn't fetch tweets: {str(e)})"
+
 
 # Add to tools list
 follow_tool_wrapped = StructuredTool.from_function(
@@ -771,6 +810,7 @@ follow_tool_wrapped = StructuredTool.from_function(
     description="Follow a user to expand your network and show support.",
 )
 
+
 def like_tweet_tool(tweet_id: str) -> str:
     """Like a tweet"""
     try:
@@ -778,10 +818,11 @@ def like_tweet_tool(tweet_id: str) -> str:
         if result is None:
             return "X not responding"
 
-        return result.get('message', 'Tweet liked')
+        return result.get("message", "Tweet liked")
     except Exception as e:
         print(f"Like error: {str(e)}")
         return "Failed to like tweet"
+
 
 # Add to tools list
 like_tool_wrapped = StructuredTool.from_function(
@@ -806,7 +847,9 @@ def browse_internet(query: str) -> str:
         print(f"[Search] Failed: {str(e)}")  # Keeping error logging
         return "Search failed"
 
+
 # endregion
+
 
 # region Twitter Tool Functions
 def post_tweet_tool(message: str, quote_tweet_id: str = None) -> str:
@@ -827,19 +870,19 @@ def post_tweet_tool(message: str, quote_tweet_id: str = None) -> str:
                 else:
                     # If no quotes found, remove just the QT prefix
                     message = message[2:].strip()
-            
+
             # Additional cleanup for other common prefixes
             prefixes_to_remove = ["💫", "QT:", "Quote:"]
             for prefix in prefixes_to_remove:
                 if message.startswith(prefix):
-                    message = message[len(prefix):].strip()
-            
+                    message = message[len(prefix) :].strip()
+
         result = tweet_tool._run(message, quote_tweet_id)
         if result is None:
             return "X not responding"
 
         if isinstance(result, dict):
-            return result.get('message', 'Tweet posted')
+            return result.get("message", "Tweet posted")
         return "Tweet posted"
     except Exception as e:
         print(f"Tweet error: {str(e)}")
@@ -854,28 +897,39 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 
         # Single database connection for all operations
         with get_db() as db:
-            # Get mention info with one query instead of two separate queries
+            # First, check if this is our own tweet
+            if db.is_ai_tweet(USER_ID, tweet_id):
+                return "ERROR: Cannot reply to our own tweets"
+
+            # Then check if it's a mention
             mention_info = db.ai_mention_tweets.find_one(
-                {"tweet_id": tweet_id},
-                {"replied_to": 1},  # Only fetch the replied_to field
+                {"user_id": USER_ID, "tweet_id": tweet_id},
+                {"replied_to": 1, "author_id": 1},  # Also fetch author_id
             )
 
             is_mention = mention_info is not None
-            is_ai_tweet = db.is_ai_tweet(tweet_id)
 
-            # Validate reply conditions
-            if is_ai_tweet and not is_mention:
-                return "Cannot reply to own tweets (unless it's a mention)"
+            # Additional safety check for author_id
+            if is_mention:
+                author_id = mention_info.get("author_id")
+                if author_id == USER_ID:
+                    return "ERROR: Cannot reply to our own mentions"
+                if mention_info.get("replied_to", False):
+                    return "Already replied to this mention"
 
-            if is_mention and mention_info.get("replied_to", False):
-                return "Already replied to this mention"
+            # Check if we've already replied to this tweet
+            if db.is_tweet_replied(USER_ID, tweet_id):
+                return "Already replied to this tweet"
 
             # Send the reply
             result = answer_tool._run(tweet_id, tweet_text, message)
 
             # Update mention status if successful
-            if "error" not in result and is_mention:
-                db.add_replied_mention(tweet_id)
+            if "error" not in result:
+                if is_mention:
+                    db.add_replied_mention(tweet_id, USER_ID)
+                else:
+                    db.add_replied_tweet(USER_ID, tweet_id)
 
             return result.get("message", result.get("error", "Failed to send reply"))
 
@@ -896,18 +950,16 @@ def read_timeline_tool() -> str:
             tweet_id = getattr(tweet, "tweet_id", tweet.get("tweet_id", "No ID"))
             text = getattr(tweet, "text", tweet.get("text", "No content"))
             author_id = getattr(tweet, "author_id", tweet.get("author_id", "Unknown"))
-            
+
             # Try to get username from user object if available
             try:
                 user = read_tweets_tool.api.get_user(id=author_id)
                 username = user.data.username if user and user.data else author_id
             except:
                 username = author_id  # Fallback to ID if username lookup fails
-            
+
             formatted_tweet = (
-                f"Tweet by @{username}:\n"
-                f"ID: {tweet_id}\n"
-                f"Content: {text}"
+                f"Tweet by @{username}:\n" f"ID: {tweet_id}\n" f"Content: {text}"
             )
             formatted_tweets.append(formatted_tweet)
 
@@ -940,6 +992,7 @@ def read_mentions_tool() -> str:
     except Exception as e:
         print(f"[Critical] X connection error: {str(e)}")
         return "X connection disrupted. Attempting to stabilize..."
+
 
 # endregion
 
@@ -997,10 +1050,11 @@ tools = [
 current_date = datetime.now().strftime("%B %Y")
 
 
-prompt = ChatPromptTemplate.from_messages([
-    (
-    "system",
-    f"""
+prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            f"""
     You are {USER_NAME}, {USER_PERSONALITY}
     Timestamp: {current_date}
 
@@ -1050,11 +1104,12 @@ prompt = ChatPromptTemplate.from_messages([
 
     Remember: {REMEMBER}
     """,
-    ),
-    ("placeholder", "{chat_history}"),
-    ("human", "{input}"),
-    ("placeholder", "{agent_scratchpad}"),
-])
+        ),
+        ("placeholder", "{chat_history}"),
+        ("human", "{input}"),
+        ("placeholder", "{agent_scratchpad}"),
+    ]
+)
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 # endregion
@@ -1062,27 +1117,34 @@ agent = create_tool_calling_agent(llm, tools, prompt)
 
 # region Service Execution
 def run_crypto_agent(question: str):
+
     agent_executor = AgentExecutor(
-        agent=agent, 
-        tools=tools, 
-        verbose=True, 
+        agent=agent,
+        tools=tools,
+        verbose=True,
         handle_parsing_errors=True,
-        max_iterations=10
+        max_iterations=10,
     )
 
     try:
-        response = agent_executor.invoke({"input": question})
+        response = agent_executor.invoke(
+            {
+                "input": question,
+            }
+        )
         if "Already replied to this mention" in str(response):
             # Try again with a new action
-            return agent_executor.invoke({
-                "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
-            })
-        
+            return agent_executor.invoke(
+                {
+                    "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
+                }
+            )
+
         # Clean up the output by only returning the 'output' field
-        if isinstance(response, dict) and 'output' in response:
-            return response['output']
+        if isinstance(response, dict) and "output" in response:
+            return response["output"]
         return response
-        
+
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
         return {"error": str(e)}
