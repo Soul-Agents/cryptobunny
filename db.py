@@ -352,7 +352,8 @@ class TweetDB:
         """Close MongoDB connection if it's open and hasn't been closed yet"""
         if hasattr(self, 'client') and self.client and not hasattr(self, '_closed'):
             self.client.close()
-            print("MongoDB connection closed")
+            # Remove or comment out this print statement since the context manager will handle it
+            # print("MongoDB connection closed")
             self._closed = True
 
     def add_ai_mention_tweets(self, tweets: List[Dict]) -> Dict:
@@ -624,4 +625,4 @@ class TweetDB:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
-        # Don't print another message here
+        print("MongoDB connection closed")  # Keep only this print statement
