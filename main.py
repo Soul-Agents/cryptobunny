@@ -709,7 +709,7 @@ def search_twitter_tool(query: str) -> str:
 twitter_search = StructuredTool.from_function(
     func=search_twitter_tool,
     name="search_twitter",
-    description="Search Twitter for specific topics, cashtags, or conversations. Examples: '$BTC', 'web3 gaming', 'AI agents'",
+    description="Search Twitter for specific topics, cashtags, or conversations.",
 )
 
 def follow_user_tool(user_id: str) -> str:
@@ -1025,7 +1025,7 @@ prompt = ChatPromptTemplate.from_messages([
     1. FIRST Observe (use ONE or TWO):
        - read_timeline: Fetch and display the latest 10 tweets from your home timeline
        - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
-       - search_twitter: Search for specific topics or conversations (ALWAYS USE THIS FIRST)
+       - search_twitter: Search for specific topics or conversations (use this first)
     
     2. THEN Research (use ONE or BOTH):
        - browse_internet: Search recent news and discussions from websites
