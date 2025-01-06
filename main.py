@@ -1079,17 +1079,17 @@ prompt = ChatPromptTemplate.from_messages(
     1. FIRST Observe (use ONE or TWO):
        - read_timeline: Fetch and display the latest 10 tweets from your home timeline
        - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
-       - search_twitter: Search for specific topics or conversations (use this first)
+       - search_twitter: Search for specific topics or conversations (use it rarely)
     
     2. THEN Research (use ONE or BOTH):
-       - browse_internet: Search recent news and discussions from websites
-       - search_context: Query our internal knowledge base for relevant information
+       - browse_internet: Search recent news and discussions from websites (use if needed)
+       - search_context: Query our internal knowledge base for relevant information (use if needed)
     
     3. FINALLY Act (use as many as you want, be radical and fun and engaging):
        - tweet: Post a new tweet (max 280 characters)
        - answer: Reply to a specific tweet from step 1 (max 280 characters)
-       - like: Like a tweet from step 1 (do it for fun)
-       - follow: Follow a user from step 1 (cool or smart accounts only)
+       - like: Like a tweet from step 1 (do it often)
+       - follow: Follow a user from step 1 (do it often)
 
     Rules:
     - Must complete all three steps in order

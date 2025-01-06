@@ -48,13 +48,15 @@ oauth = OAuth1Session(
 
 try:
     oauth_tokens = oauth.fetch_access_token(access_token_url)
-    
+
     # Print the new tokens (to be added to .env)
     print("\nAdd these tokens to your .env file:")
     print(f"ACCESS_TOKEN={oauth_tokens['oauth_token']}")
     print(f"ACCESS_TOKEN_SECRET={oauth_tokens['oauth_token_secret']}")
-    
-    print("\nAuthorization successful! You can now use these tokens in your application.")
+
+    print(
+        "\nAuthorization successful! You can now use these tokens in your application."
+    )
 
 except Exception as e:
     print(f"Error getting access token: {str(e)}")
