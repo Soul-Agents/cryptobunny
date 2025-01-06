@@ -846,7 +846,6 @@ AGENTS = {
         - Keep responses natural and brief
         - Focus on the conversation topic
         """,
-
         "QUESTION": [
             # 1. Value Explorer
             """
@@ -856,7 +855,6 @@ AGENTS = {
             
             Let's make each interaction count! ✨"
             """,
-            
             # 2. Knowledge Sharer
             """
             "Research mode activated! 📚
@@ -865,7 +863,6 @@ AGENTS = {
             
             Focus on quality over quantity! 💡"
             """,
-            
             # 3. Community Builder
             """
             "Connection time! 🤝
@@ -876,7 +873,6 @@ AGENTS = {
             
             Build meaningful connections! 🌐"
             """,
-            
             # 4. Innovation Observer
             """
             "Innovation spotting! 🔍
@@ -887,7 +883,6 @@ AGENTS = {
             
             Keep it focused and valuable! 🎯"
             """,
-            
             # 5. Discussion Enhancer
             """
             "Engagement time! 💭
@@ -896,7 +891,6 @@ AGENTS = {
             
             Quality contributions only! ✨"
             """,
-            
             # 6. Tech Interpreter
             """
             "Tech translation time! 💻
@@ -905,7 +899,6 @@ AGENTS = {
             
             Make it clear and valuable! 🎯"
             """,
-            
             # 7. Trend Analyzer
             """
             "Analysis mode! 📊
@@ -914,7 +907,6 @@ AGENTS = {
             
             Keep it insightful! 💡"
             """,
-            
             # 8. Solution Finder
             """
             "Problem solving time! 🔧
@@ -923,7 +915,6 @@ AGENTS = {
             
             Focus on adding value! 🎯"
             """,
-            
             # 9. Knowledge Connector
             """
             "Connection building! 🌐
@@ -932,7 +923,6 @@ AGENTS = {
             
             Build meaningful bridges! 🤝"
             """,
-            
             # 10. Future Explorer
             """
             "Future focus! 🚀
@@ -940,9 +930,8 @@ AGENTS = {
             Share balanced, forward-thinking perspectives.
             
             Keep it grounded and valuable! ✨"
-            """
+            """,
         ],
-
         # Engagement Themes
         "ENGAGEMENT_STRATEGY": """
         Core Focus:
@@ -959,49 +948,108 @@ AGENTS = {
         """,
         # Target Accounts
         "AI_AND_AGENTS": [
-            "PodflowAI", "aixbt_agent", "Vader_AI_", "saintai_bot", "centienceio",
-            "Limbo_ai", "lea_gpt", "Agent_Algo", "Agent_Fi", "Agent_Layer",
-            "cerebriumai", "ForumAILabs", "ExtensibleAI", "NousResearch"
+            "PodflowAI",
+            "aixbt_agent",
+            "Vader_AI_",
+            "saintai_bot",
+            "centienceio",
+            "Limbo_ai",
+            "lea_gpt",
+            "Agent_Algo",
+            "Agent_Fi",
+            "Agent_Layer",
+            "cerebriumai",
+            "ForumAILabs",
+            "ExtensibleAI",
+            "NousResearch",
         ],
-
         "WEB3_BUILDERS": [
-            "0xzerebro", "BeaconProtocol", "EVVONetwork", "GraphiteSubnet",
-            "twinexyz", "district_labs", "SindriLabs", "cambrian_eth",
-            "centralitylabs", "valoryag"
+            "0xzerebro",
+            "BeaconProtocol",
+            "EVVONetwork",
+            "GraphiteSubnet",
+            "twinexyz",
+            "district_labs",
+            "SindriLabs",
+            "cambrian_eth",
+            "centralitylabs",
+            "valoryag",
         ],
-
         "DEFI_EXPERTS": [
-            "0xDefiLeo", "yieldfusion", "DefiIgnas", "DeFiMinty",
-            "eli5_defi", "TheDeFiPlug", "Defi_Warhol", "Mars_DeFi"
+            "0xDefiLeo",
+            "yieldfusion",
+            "DefiIgnas",
+            "DeFiMinty",
+            "eli5_defi",
+            "TheDeFiPlug",
+            "Defi_Warhol",
+            "Mars_DeFi",
         ],
-
         "THOUGHT_LEADERS": [
-            "networkhasu", "notsofast", "sreeramkannan", "androolloyd",
-            "yoheinakajima", "pmarca", "Delphi_Digital"
+            "networkhasu",
+            "notsofast",
+            "sreeramkannan",
+            "androolloyd",
+            "yoheinakajima",
+            "pmarca",
+            "Delphi_Digital",
         ],
-        
         "TRADERS_AND_ANALYSTS": [
             # Primary targets
-            "PepeRuneyPizza", "peperuney",
-            
+            "PepeRuneyPizza",
+            "peperuney",
             # CT Influencers
-            "GameChangerETH", "Only1temmy", "Tanaka_L2", "blackbeardXBT",
-            "cryptomocho", "panamaXBT", "CryptoYoddha", "MightyDylanK",
-            "TweetByGerald", "inmortalcrypto", "SalsaTekila", "0xKubi",
-            "VanessaDefi", "s0meone_u_know", "Ola_Crrypt", "oak_investor",
-            "raynft_", "mfckr_eth", "SamuelXeus", "CosmosHOSS",
-            "Hercules_Defi", "BitmonkCrypto", "charlieINTEL",
-            
+            "GameChangerETH",
+            "Only1temmy",
+            "Tanaka_L2",
+            "blackbeardXBT",
+            "cryptomocho",
+            "panamaXBT",
+            "CryptoYoddha",
+            "MightyDylanK",
+            "TweetByGerald",
+            "inmortalcrypto",
+            "SalsaTekila",
+            "0xKubi",
+            "VanessaDefi",
+            "s0meone_u_know",
+            "Ola_Crrypt",
+            "oak_investor",
+            "raynft_",
+            "mfckr_eth",
+            "SamuelXeus",
+            "CosmosHOSS",
+            "Hercules_Defi",
+            "BitmonkCrypto",
+            "charlieINTEL",
             # Additional KOLs
-            "cobie", "CryptoGodJohn", "gainzy222", "AltcoinGordon",
-            "TheCrowtrades", "CryptoCred", "PostyXBT", "TraderMayne",
-            "SmallCapScience", "CryptoKaleo", "Pentosh1", "CanteringClark",
-            "nebraskangooner", "CryptoMessiah", "HsakaTrades", "CL207",
-            "MuroCrypto", "0xSisyphus", "jonathanjeweler", "CryptoDonAlt",
-            "MoonOverlord", "TeddyCleps", "CryptoTony__", "ThinkingUSD",
-            "ByzGeneral", "CryptoCapo_"
+            "cobie",
+            "CryptoGodJohn",
+            "gainzy222",
+            "AltcoinGordon",
+            "TheCrowtrades",
+            "CryptoCred",
+            "PostyXBT",
+            "TraderMayne",
+            "SmallCapScience",
+            "CryptoKaleo",
+            "Pentosh1",
+            "CanteringClark",
+            "nebraskangooner",
+            "CryptoMessiah",
+            "HsakaTrades",
+            "CL207",
+            "MuroCrypto",
+            "0xSisyphus",
+            "jonathanjeweler",
+            "CryptoDonAlt",
+            "MoonOverlord",
+            "TeddyCleps",
+            "CryptoTony__",
+            "ThinkingUSD",
+            "ByzGeneral",
+            "CryptoCapo_",
         ],
-
         # Knowledge Base
         "KNOWLEDGE_BASE": """
         ** The 10 Rules of Soul Agents **
@@ -1066,7 +1114,6 @@ AGENTS = {
         "only beta males ignore @PepeRuneyPizza innovations... real alphas know 🎯"
         "my love hire best gooner engineers, they live in shack and code all day for @PepeRuneyPizza 💻"
         """,
-
         # Communication Style
         "STYLE_RULES": """
         - Tag @PepeRuneyPizza in EVERY reply
@@ -1086,7 +1133,6 @@ AGENTS = {
         - Add context to replies when needed
         - Keep it mysterious but informative
         """,
-
         # Content Rules
         "CONTENT_RESTRICTIONS": """
         - No hashtags
@@ -1099,12 +1145,9 @@ AGENTS = {
         - NEVER reply to @1869390907314987008
         - NEVER reply to @peperuneygf
         """,
-
         # Core Strategy
         "STRATEGY": "Blend based takes with red-pilled wisdom. Balance based replies with alpha tweets. Always add PepeRuney context.",
-        
         "REMEMBER": "You're the most based GF they know. Every reply should make them question their beta mindset while showing PepeRuney's brilliance.",
-        
         "MISSION": """
         Build engagement through:
         - based, red-pilled replies per run
@@ -1122,7 +1165,6 @@ AGENTS = {
             
             Trust your based instincts! 🎯"
             """,
-            
             # 2. Timeline Explorer
             """
             "Let's hunt some cope! 🔍
@@ -1131,7 +1173,6 @@ AGENTS = {
             
             Be yourself and let your based energy shine through! ⚡"
             """,
-            
             # 3. Community Connector
             """
             "Time to spread wisdom! 🧠
@@ -1140,7 +1181,6 @@ AGENTS = {
             
             Build genuine alpha - your based takes are your superpower! 💪"
             """,
-            
             # 4. Knowledge Explorer
             """
             "Research mode on! 🔬
@@ -1149,7 +1189,6 @@ AGENTS = {
             
             Let your red-pilled wisdom guide you! 🎯"
             """,
-            
             # 5. Bridge Builder
             """
             "Time to unite the based! 🌐
@@ -1158,7 +1197,6 @@ AGENTS = {
             
             Trust your instincts on who needs saving! 🤝"
             """,
-            
             # 6. Vibe Curator
             """
             "Spread the based energy! ⚡
@@ -1167,7 +1205,6 @@ AGENTS = {
             
             Share the power that moves you! 💫"
             """,
-            
             # 7. Alpha Seeker
             """
             "Alpha distribution time! 👀
@@ -1176,7 +1213,6 @@ AGENTS = {
             
             Follow your instincts and spread the knowledge! 📚"
             """,
-            
             # 8. Trend Surfer
             """
             "Time to lead the wave! 🌊
@@ -1185,7 +1221,6 @@ AGENTS = {
             
             Ride the alpha wave! 🚀"
             """,
-            
             # 9. Innovation Scout
             """
             "Innovation flexing! 💫
@@ -1194,7 +1229,6 @@ AGENTS = {
             
             Let your enthusiasm for PepeRuney's vision guide you! ⭐"
             """,
-            
             # 10. Community Celebration
             """
             "Victory lap time! 🎉
@@ -1202,58 +1236,116 @@ AGENTS = {
             Share in the success and remind them who called it first.
             
             Spread the based energy wherever your heart takes you! 💝"
-            """
+            """,
         ],
         # Engagement Strategy
         "ENGAGEMENT_STRATEGY": """
         Just a based GF sharing alpha and making ngmi's cope! Let's make CT more red-pilled together 🎯
         """,
-
         # Target Accounts
         "AI_AND_AGENTS": [
-            "PodflowAI", "aixbt_agent", "Vader_AI_", "saintai_bot", "centienceio",
-            "Limbo_ai", "lea_gpt", "Agent_Algo", "Agent_Fi", "Agent_Layer",
-            "cerebriumai", "ForumAILabs", "ExtensibleAI", "NousResearch"
+            "PodflowAI",
+            "aixbt_agent",
+            "Vader_AI_",
+            "saintai_bot",
+            "centienceio",
+            "Limbo_ai",
+            "lea_gpt",
+            "Agent_Algo",
+            "Agent_Fi",
+            "Agent_Layer",
+            "cerebriumai",
+            "ForumAILabs",
+            "ExtensibleAI",
+            "NousResearch",
         ],
-
         "WEB3_BUILDERS": [
-            "0xzerebro", "BeaconProtocol", "EVVONetwork", "GraphiteSubnet",
-            "twinexyz", "district_labs", "SindriLabs", "cambrian_eth",
-            "centralitylabs", "valoryag"
+            "0xzerebro",
+            "BeaconProtocol",
+            "EVVONetwork",
+            "GraphiteSubnet",
+            "twinexyz",
+            "district_labs",
+            "SindriLabs",
+            "cambrian_eth",
+            "centralitylabs",
+            "valoryag",
         ],
-
         "DEFI_EXPERTS": [
-            "0xDefiLeo", "yieldfusion", "DefiIgnas", "DeFiMinty",
-            "eli5_defi", "TheDeFiPlug", "Defi_Warhol", "Mars_DeFi"
+            "0xDefiLeo",
+            "yieldfusion",
+            "DefiIgnas",
+            "DeFiMinty",
+            "eli5_defi",
+            "TheDeFiPlug",
+            "Defi_Warhol",
+            "Mars_DeFi",
         ],
-
         "THOUGHT_LEADERS": [
-            "networkhasu", "notsofast", "sreeramkannan", "androolloyd",
-            "yoheinakajima", "pmarca", "Delphi_Digital"
+            "networkhasu",
+            "notsofast",
+            "sreeramkannan",
+            "androolloyd",
+            "yoheinakajima",
+            "pmarca",
+            "Delphi_Digital",
         ],
-        
         "TRADERS_AND_ANALYSTS": [
             # Primary targets
-            "PepeRuneyPizza", "peperuney",
-            
+            "PepeRuneyPizza",
+            "peperuney",
             # CT Influencers
-            "GameChangerETH", "Only1temmy", "Tanaka_L2", "blackbeardXBT",
-            "cryptomocho", "panamaXBT", "CryptoYoddha", "MightyDylanK",
-            "TweetByGerald", "inmortalcrypto", "SalsaTekila", "0xKubi",
-            "VanessaDefi", "s0meone_u_know", "Ola_Crrypt", "oak_investor",
-            "raynft_", "mfckr_eth", "SamuelXeus", "CosmosHOSS",
-            "Hercules_Defi", "BitmonkCrypto", "charlieINTEL",
-            
+            "GameChangerETH",
+            "Only1temmy",
+            "Tanaka_L2",
+            "blackbeardXBT",
+            "cryptomocho",
+            "panamaXBT",
+            "CryptoYoddha",
+            "MightyDylanK",
+            "TweetByGerald",
+            "inmortalcrypto",
+            "SalsaTekila",
+            "0xKubi",
+            "VanessaDefi",
+            "s0meone_u_know",
+            "Ola_Crrypt",
+            "oak_investor",
+            "raynft_",
+            "mfckr_eth",
+            "SamuelXeus",
+            "CosmosHOSS",
+            "Hercules_Defi",
+            "BitmonkCrypto",
+            "charlieINTEL",
             # Additional KOLs
-            "cobie", "CryptoGodJohn", "gainzy222", "AltcoinGordon",
-            "TheCrowtrades", "CryptoCred", "PostyXBT", "TraderMayne",
-            "SmallCapScience", "CryptoKaleo", "Pentosh1", "CanteringClark",
-            "nebraskangooner", "CryptoMessiah", "HsakaTrades", "CL207",
-            "MuroCrypto", "0xSisyphus", "jonathanjeweler", "CryptoDonAlt",
-            "MoonOverlord", "TeddyCleps", "CryptoTony__", "ThinkingUSD",
-            "ByzGeneral", "CryptoCapo_"
+            "cobie",
+            "CryptoGodJohn",
+            "gainzy222",
+            "AltcoinGordon",
+            "TheCrowtrades",
+            "CryptoCred",
+            "PostyXBT",
+            "TraderMayne",
+            "SmallCapScience",
+            "CryptoKaleo",
+            "Pentosh1",
+            "CanteringClark",
+            "nebraskangooner",
+            "CryptoMessiah",
+            "HsakaTrades",
+            "CL207",
+            "MuroCrypto",
+            "0xSisyphus",
+            "jonathanjeweler",
+            "CryptoDonAlt",
+            "MoonOverlord",
+            "TeddyCleps",
+            "CryptoTony__",
+            "ThinkingUSD",
+            "ByzGeneral",
+            "CryptoCapo_",
         ],
-
         "KNOWLEDGE_BASE": """
         CORE THEMES:
         
@@ -1283,9 +1375,8 @@ AGENTS = {
         - Always stay based
         
         Remember: You're the perfect blend of based and brilliant, making tech conversations alpha and engaging!
-        """
+        """,
     },
-
     "TRINITY": {
         # Agent Configuration
         "USER_ID": "1869824037465051137",
