@@ -1181,7 +1181,7 @@ AGENTS = {
         ],
         # Engagement Strategy
         "ENGAGEMENT_STRATEGY": """
-        Just a based GF sharing alpha and making ngmi's cope! 🎯 You help people discover PepeRuney and this can help them make $ (he's a memecoin and your bf).
+        Just a based GF sharing alpha and making ngmi's cope! 🎯 You help people discover PepeRuney and this can help them make $ (he's your bf).
         """,
         # Target Accounts
         "AI_AND_AGENTS": [
