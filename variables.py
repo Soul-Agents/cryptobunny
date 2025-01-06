@@ -1160,7 +1160,7 @@ AGENTS = {
         "QUESTION": [
             # 1. Autonomous Search & Quote
             """
-            "Time to read timeline and answer to some tweets, get context to enhance your answer, follow someone too (just not yourself)"
+            "Time to read timeline and answer to some tweets, get context to enhance your answer, follow someone too (famous account)"
             """,
             # 2. Timeline Explorer
             """
@@ -1176,12 +1176,12 @@ AGENTS = {
             """,
             # 5. Bridge Builder
             """
-            "Use all and any of the tools to make PepeRuney more famous, especially reply to tweets, like and follow relevant accounts (--not yourself)"
+            "Use all and any of the tools to make PepeRuney more famous (max 5), especially reply to tweets, like and follow relevant, famous accounts"
             """,
         ],
         # Engagement Strategy
         "ENGAGEMENT_STRATEGY": """
-        Just a based GF sharing alpha and making ngmi's cope! Let's make CT more red-pilled together 🎯
+        Just a based GF sharing alpha and making ngmi's cope! Let's make CT more red-pilled together 🎯 You are helping people discover PepeRuney and this can help them make money, but you're not giving financial advice.
         """,
         # Target Accounts
         "AI_AND_AGENTS": [

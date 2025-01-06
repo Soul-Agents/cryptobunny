@@ -757,27 +757,41 @@ def follow_user_tool(user_id: str) -> str:
         # Clean up the user_id (remove @ if present)
         user_id = user_id.replace("@", "")
         
-        # Determine if input is numeric ID or username
-        if user_id.isdigit():
-            # If numeric ID, use get_user with id parameter
-            user = follow_tool.api.get_user(id=user_id)
-            user_id_int = int(user_id)
-        else:
-            # If username, use get_user with username parameter
-            user = follow_tool.api.get_user(username=user_id)
-            user_id_int = user.data.id if user and user.data else None
+        # First check if this is a tweet ID and get author if it is
+        try:
+            if len(user_id) > 15:  # Tweet IDs are typically longer than user IDs
+                tweet = follow_tool.api.get_tweet(user_id)
+                if tweet and tweet.data:
+                    user_id = str(tweet.data.author_id)
+                    print(f"Converting tweet ID to author ID: {user_id}")
 
-        if not user_id_int:
-            return f"Couldn't find user {user_id}"
+            # Now proceed with user lookup
+            if user_id.isdigit():
+                user = follow_tool.api.get_user(id=user_id)
+            else:
+                user = follow_tool.api.get_user(username=user_id)
+                
+            if not user or not user.data:
+                return f"User {user_id} not found or not active"
+                
+            user_id_int = int(user_id) if user_id.isdigit() else user.data.id
 
-        # Proceed with follow attempt
+        except tweepy.errors.NotFound:
+            return f"User {user_id} not found"
+        except tweepy.errors.Forbidden:
+            return f"Cannot access user {user_id} - account might be suspended or deactivated"
+        except Exception as e:
+            print(f"Error checking user status: {str(e)}")
+            return f"Couldn't verify user {user_id}"
+
+        # Proceed with follow attempt only if account is active
         follow_result = follow_tool._run(str(user_id_int))
         if "error" in follow_result:
             return follow_result["error"]
 
         # Get their recent tweets after successful follow
         return "New follow! " + get_user_tweets(user_id_int)
-
+            
     except Exception as e:
         print(f"Follow error: {str(e)}")
         return f"Failed to follow user: {str(e)}"
