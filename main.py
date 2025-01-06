@@ -756,23 +756,20 @@ def follow_user_tool(user_id: str) -> str:
     try:
         # Clean up the user_id (remove @ if present)
         user_id = user_id.replace("@", "")
-
-        # First get the numeric ID if username was provided
-        try:
+        
+        # Determine if input is numeric ID or username
+        if user_id.isdigit():
+            # If numeric ID, use get_user with id parameter
+            user = follow_tool.api.get_user(id=user_id)
+            user_id_int = int(user_id)
+        else:
+            # If username, use get_user with username parameter
             user = follow_tool.api.get_user(username=user_id)
-            if user and user.data:
-                user_id_int = user.data.id
-            else:
-                # If not found by username, try as numeric ID
-                user_id_int = int(user_id) if user_id.isdigit() else None
+            user_id_int = user.data.id if user and user.data else None
 
-            if not user_id_int:
-                return f"Couldn't find user {user_id}"
-        except Exception as e:
-            print(f"Error getting user ID: {str(e)}")
-            return f"Couldn't process user {user_id}"
+        if not user_id_int:
+            return f"Couldn't find user {user_id}"
 
-        # Skip friendship check for now since it's not critical
         # Proceed with follow attempt
         follow_result = follow_tool._run(str(user_id_int))
         if "error" in follow_result:
@@ -783,7 +780,7 @@ def follow_user_tool(user_id: str) -> str:
 
     except Exception as e:
         print(f"Follow error: {str(e)}")
-        return "Failed to follow user"
+        return f"Failed to follow user: {str(e)}"
 
 
 def get_user_tweets(user_id) -> str:
