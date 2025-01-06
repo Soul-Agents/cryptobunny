@@ -756,25 +756,42 @@ def follow_user_tool(user_id: str) -> str:
     try:
         # Clean up the user_id (remove @ if present)
         user_id = user_id.replace("@", "")
+        print(f"Processing follow request for: {user_id}")
         
-        # First check if this is a tweet ID and get author if it is
         try:
-            if len(user_id) > 15:  # Tweet IDs are typically longer than user IDs
-                tweet = follow_tool.api.get_tweet(user_id)
+            # If it's a numeric ID longer than 15 chars, it's likely a tweet ID
+            if user_id.isdigit() and len(user_id) > 15:
+                print(f"Detected tweet ID, fetching author...")
+                tweet = follow_tool.api.get_tweet(
+                    user_id,
+                    expansions=['author_id'],
+                    user_fields=['username']
+                )
                 if tweet and tweet.data:
                     user_id = str(tweet.data.author_id)
-                    print(f"Converting tweet ID to author ID: {user_id}")
+                    print(f"Found author ID: {user_id}")
+                else:
+                    return "Could not find tweet"
 
-            # Now proceed with user lookup
+            # At this point user_id should be either a username or numeric user ID
+            print(f"Looking up user: {user_id}")
             if user_id.isdigit():
-                user = follow_tool.api.get_user(id=user_id)
+                user = follow_tool.api.get_user(
+                    id=user_id,
+                    user_fields=['username', 'public_metrics']
+                )
             else:
-                user = follow_tool.api.get_user(username=user_id)
+                user = follow_tool.api.get_user(
+                    username=user_id,
+                    user_fields=['username', 'public_metrics']
+                )
                 
             if not user or not user.data:
                 return f"User {user_id} not found or not active"
                 
-            user_id_int = int(user_id) if user_id.isdigit() else user.data.id
+            # Always use the numeric ID for following
+            user_id_int = user.data.id
+            print(f"Resolved to user ID: {user_id_int}")
 
         except tweepy.errors.NotFound:
             return f"User {user_id} not found"
