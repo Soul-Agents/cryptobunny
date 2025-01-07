@@ -31,6 +31,8 @@ from variables import (
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
+from tavily_domains import TAVILY_DOMAINS
+
 
 # Load environment variables
 load_dotenv(override=True)
@@ -129,7 +131,7 @@ class FollowUserTool:
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
+            wait_on_rate_limit=True,
         )
 
     def _run(self, user_id: str) -> dict:
@@ -660,64 +662,7 @@ try:
     tavily_search = TavilySearchResults(
         max_results=3,
         search_params={
-            "include_domains": [
-                # Social and Community
-                "twitter.com",  # Critical for crypto discussions
-                "x.com",  # New Twitter alias
-                "coindesk.com",  # Trusted news
-                "cointelegraph.com",  # Trusted news
-                "decrypt.co",  # Crypto and Web3 analysis
-                "theblock.co",  # Deep dive articles
-                "medium.com",  # User-published insights
-                "reddit.com",  # Community discussions (e.g., r/cryptocurrency)
-                "bitcointalk.org",  # OG crypto forum
-                "t.me",  # Telegram public groups
-                "discord.com",  # Discord for communities
-                "github.com",  # Developer discussions and repos
-                "youtube.com",  # Influencer and analysis videos
-                "stackexchange.com",  # Technical Q&A
-                "quora.com",  # Community-driven Q&A
-                "tumblr.com",  # Niche blogs and analysis
-                "weibo.com",  # Chinese crypto discussions
-                "docs.google.com",  # Linked shared documents or alpha
-                "dune.com",  # On-chain analytics dashboards
-                "etherscan.io",  # Transaction details and wallet analysis
-                "defillama.com",  # DeFi data
-                "glassnode.com",  # On-chain data insights
-                "messari.io",  # Market intelligence
-                "nansen.ai",  # Wallet tracking and analysis
-                "tokenomics.xyz",  # Tokenomics and project insights
-                "sushi.com",  # Community and DeFi discussions
-                "arxiv.org",  # Research papers
-                "4chan.org",  # Key for early alpha
-                "8kun.top",  # Underground discussions
-                "linkedin.com",  # Professional insights
-                "metafilter.com",  # Niche discussions
-                # Asian Markets
-                "weibo.com",  # Chinese crypto discussions
-                "douban.com",  # Chinese community insights
-                # News and Analysis
-                "coindesk.com",  # Trusted news
-                "cointelegraph.com",  # Trusted news
-                "decrypt.co",  # Crypto and Web3 analysis
-                "theblock.co",  # Deep dive articles
-                # Technical Resources
-                "github.com",  # Developer discussions and repos
-                "stackexchange.com",  # Technical Q&A
-                "docs.google.com",  # Shared documents/alpha
-                # Data and Analytics
-                "dune.com",  # On-chain analytics dashboards
-                "etherscan.io",  # Transaction details and wallet analysis
-                "defillama.com",  # DeFi data
-                "glassnode.com",  # On-chain data insights
-                "messari.io",  # Market intelligence
-                "nansen.ai",  # Wallet tracking and analysis
-                "tokenomics.xyz",  # Tokenomics and project insights
-                "sushi.com",  # Community and DeFi discussions
-                # Content Platforms
-                "youtube.com",  # Influencer and analysis videos
-                "arxiv.org",  # Research papers
-            ],
+            "include_domains": TAVILY_DOMAINS,
             "days": 7,  # Changed from recency_days per API docs
             "search_depth": "basic",  # Explicitly set for reliability
             "topic": "general",  # Explicitly set topic
@@ -757,15 +702,13 @@ def follow_user_tool(user_id: str) -> str:
         # Clean up the user_id (remove @ if present)
         user_id = user_id.replace("@", "")
         print(f"Processing follow request for: {user_id}")
-        
+
         try:
             # If it's a numeric ID longer than 15 chars, it's likely a tweet ID
             if user_id.isdigit() and len(user_id) > 15:
                 print(f"Detected tweet ID, fetching author...")
                 tweet = follow_tool.api.get_tweet(
-                    user_id,
-                    expansions=['author_id'],
-                    user_fields=['username']
+                    user_id, expansions=["author_id"], user_fields=["username"]
                 )
                 if tweet and tweet.data:
                     user_id = str(tweet.data.author_id)
@@ -777,18 +720,12 @@ def follow_user_tool(user_id: str) -> str:
             print(f"Looking up user: {user_id}")
             if user_id.isdigit():
                 user = follow_tool.api.get_user(
-                    id=user_id,
-                    user_fields=['username', 'public_metrics']
+                    id=user_id, user_fields=["username", "public_metrics"]
                 )
-            else:
-                user = follow_tool.api.get_user(
-                    username=user_id,
-                    user_fields=['username', 'public_metrics']
-                )
-                
+
             if not user or not user.data:
                 return f"User {user_id} not found or not active"
-                
+
             # Always use the numeric ID for following
             user_id_int = user.data.id
             print(f"Resolved to user ID: {user_id_int}")
@@ -797,9 +734,11 @@ def follow_user_tool(user_id: str) -> str:
             return f"User {user_id} not found"
         except tweepy.errors.Forbidden:
             return f"Cannot access user {user_id} - account might be suspended or deactivated"
+        except tweepy.errors.TooManyRequests:
+            return f"Rate limit exceeded - please don't use this tool too often, try another tool"
         except Exception as e:
             print(f"Error checking user status: {str(e)}")
-            return f"Couldn't verify user {user_id}"
+            return f"Couldn't verify user {user_id}, try another tool"
 
         # Proceed with follow attempt only if account is active
         follow_result = follow_tool._run(str(user_id_int))
@@ -808,10 +747,10 @@ def follow_user_tool(user_id: str) -> str:
 
         # Get their recent tweets after successful follow
         return "New follow! " + get_user_tweets(user_id_int)
-            
+
     except Exception as e:
         print(f"Follow error: {str(e)}")
-        return f"Failed to follow user: {str(e)}"
+        return f"Failed to follow user: {str(e)}, try another tool"
 
 
 def get_user_tweets(user_id) -> str:
@@ -1117,7 +1056,7 @@ prompt = ChatPromptTemplate.from_messages(
        - tweet: Post a new tweet (max 280 characters)
        - answer: Reply to a specific tweet from step 1 (max 280 characters)
        - like: Like a tweet from step 1 (do it often)
-       - follow: Follow a user from step 1 (do it often)
+       - follow: Follow a user from step 1 (do it ONLY ONCE and rarely)
 
     Rules:
     - Must complete all three steps in order

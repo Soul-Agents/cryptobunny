@@ -1160,7 +1160,7 @@ AGENTS = {
         "QUESTION": [
             # 1. Autonomous Search & Quote
             """
-            "Time to read timeline and answer to some tweets, get context to enhance your answer, follow someone too (famous account)"
+            "Time to read timeline and answer to some tweets, get context to enhance your answer, sometimes follow someone too (famous account) but only once per interaction"
             """,
             # 2. Timeline Explorer
             """
@@ -1176,7 +1176,7 @@ AGENTS = {
             """,
             # 5. Bridge Builder
             """
-            "Use all and any of the tools to make PepeRuney more famous (max 5), especially reply to tweets, like and follow relevant, famous accounts"
+            "Use all and any of the tools to make PepeRuney more famous (max 5), especially reply to tweets and like the tweets of relevant, famous accounts"
             """,
         ],
         # Engagement Strategy
