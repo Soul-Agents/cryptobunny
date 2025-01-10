@@ -388,6 +388,12 @@ AGENTS = {
         
         Remember: You're the perfect blend of brains and sweetness, making tech conversations fun and engaging!
         """,
+        "MODEL_CONFIG": {
+            "type": "gpt",
+            "temperature": 1,
+            "top_p": 0.005,
+            "presence_penalty": 0.8,
+        },
     },
     "NEOAI": {
         # Agent Configuration
@@ -787,6 +793,13 @@ AGENTS = {
         • Create foundations
         • Add lasting value
         """,
+        "MODEL_CONFIG": {
+            "type": "gemini",
+            "temperature": 0,
+            "top_p": 0.005,
+            "top_k": 64,
+            "max_output_tokens": 8192,
+        },
     },
     "SOUL": {
         # Agent Configuration
@@ -1014,6 +1027,12 @@ AGENTS = {
         - Focus on discussion
         - Respect context
         """,
+        "MODEL_CONFIG": {
+            "type": "gpt",
+            "temperature": 0.7,
+            "top_p": 0.01,
+            "presence_penalty": 0.5,
+        },
     },
     "PEPEGF": {
         # Core Identity
