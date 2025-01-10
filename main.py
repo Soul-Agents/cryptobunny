@@ -1068,7 +1068,7 @@ prompt = ChatPromptTemplate.from_messages(
                 
             → answer: Reply to selected tweet
                 - Be relevant and authentic, focus on your mission, it can work wonders
-                - Stay focused on goals
+                - Stay focused on goals (if a tweet is edited, don't reply to it)
                 - Build connections, find opportunities, engage to contact you and interact with you
                 
             OPTIONAL ACTIONS:
