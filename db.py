@@ -24,7 +24,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 class TweetDB:
     def __init__(self):
         # Change update threshold to 2 hours
-        self.update_threshold = timedelta(hours=2)
+        self.update_threshold = timedelta(minutes=10)
 
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
@@ -414,7 +414,7 @@ class TweetDB:
     def check_database_status(self, user_id: str) -> tuple[bool, list]:
         """
         Check database status for a specific user. Returns needs_update=True only when
-        the most recent tweet is more than 2 hours old.
+        the most recent tweet is more than the update threshold.
 
         Args:
             user_id (str): The user ID to check status for

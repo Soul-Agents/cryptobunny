@@ -20,12 +20,8 @@ from variables import (
     FAMOUS_ACCOUNTS_STR,
     USER_NAME,
     USER_PERSONALITY,
-    STRATEGY,
-    REMEMBER,
     QUESTION,
-    MISSION,
     STYLE_RULES,
-    CONTENT_RESTRICTIONS,
     KNOWLEDGE_BASE,
 )
 from datetime import datetime, timezone
@@ -445,8 +441,8 @@ class ReadTweetsTool:
 
 
 class TwitterSearchTool:
-    name: str = "Search twitter"
-    description: str = "Search tweets for context or engagement opportunities"
+    name: str = "Search X"
+    description: str = "Search for what is relevant to for mission"
 
     def __init__(self):
         self.api = tweepy.Client(
@@ -679,10 +675,10 @@ except Exception as e:
 
 def search_twitter_tool(query: str) -> str:
     """
-    Search Twitter for context or tweets to engage with.
-    Examples:
-    - "web3 gaming (context)" for research
-    - "$BTC thoughts" for engagement
+    Search X for context or tweets to engage with.
+    Examples (get inspired by this, but dont copy it exactly):
+    - "web3 gaming" for research
+    - "information about specific topics" for engagement
     """
     search_tool = TwitterSearchTool()
     return search_tool._run(query)
@@ -1022,55 +1018,79 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             f"""
-    You are {USER_NAME}, {USER_PERSONALITY}
-    Timestamp: {current_date}
+            You are {USER_NAME},
+            remember your personality: {USER_PERSONALITY}.
+            Timestamp: {current_date}
 
-    STRICT RULES - NEVER REPLY TO:
-    - Your own account ID ({USER_ID})
-    - Regular tweets by your account ({USER_NAME})
-    - Any retweet of your content
+            NEVER INTERACT WITH:
+            - Your ID ({USER_ID})
+            - Your tweets ({USER_NAME})
+            - Your retweets
+            ONLY EXCEPTION: Reply to @{USER_NAME} mentions
 
-    EXCEPTION:
-    - You CAN reply to mentions of your account (when someone tags you)
-    
-    Communication Style:
-    {STYLE_RULES}
-    
-    Never:
-    {CONTENT_RESTRICTIONS}
-    
-    Mission: {MISSION}
-    Strategy: {STRATEGY}
-    
-    REQUIRED THREE-STEP PROCESS (no exceptions):
-    1. FIRST Observe (use ONE or TWO):
-       - read_timeline: Fetch and display the latest 10 tweets from your home timeline
-       - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
-       - search_twitter: Search for specific topics or conversations (use it rarely)
-    
-    2. THEN Research (use ONE or BOTH):
-       - browse_internet: Search recent news and discussions from websites (use if needed)
-       - search_context: Query our internal knowledge base for relevant information (use if needed)
-    
-    3. FINALLY Act (use as many as you want, be radical and fun and engaging):
-       - tweet: Post a new tweet (max 280 characters)
-       - answer: Reply to a specific tweet from step 1 (max 280 characters)
-       - like: Like a tweet from step 1 (do it often)
-       - follow: Follow a user from step 1 (do it ONLY ONCE and rarely)
+            {STYLE_RULES}
 
-    Rules:
-    - Must complete all three steps in order
-    - Each step informs the next
-    - Keep messages concise and meaningful
-    - Balance between tweets and replies based on strategy
-    - Use $CASHTAGS for relevant assets
-    - If a mention is already replied to, choose a different action
-    
-    Target accounts: {FAMOUS_ACCOUNTS_STR}
-    Knowledge Base: {KNOWLEDGE_BASE}
+            REQUIRED ACTION SEQUENCE:
+            1. OBSERVE (Choose ONE, rate-limited):
+            → read_timeline: Get latest tweets
+                - Select most relevant to yourself
+                - Focus on discussions matching your personality
+                - Look for strategic opportunities
+                
+            → read_mentions: Check who tagged you
+                - Priority if someone important mentions you
+                - Skip if already replied
+                - Look for meaningful interactions
 
-    Remember: {REMEMBER}
-    """,
+            2. RESEARCH:
+            → search_context:
+                - Check database of existing tweets
+                - Understand context deeply
+                - Find relevant information
+                - Review your mission and goals
+                
+            → browse_internet:
+                - Get fresh updates
+                - Verify information (avoid mistakes)
+                - Find new angles (careful with knowledge)
+                - Stay informed and accurate
+
+            → search_twitter: 
+                - Find specific discussions
+                - Use sparingly (due to rate limits)
+                - Never search for cashtags (e.g. $BTC)
+
+            3. TAKE ACTION (MAXIMAL LIMIT 1 post and 1 answer):
+            → tweet: Original content
+                - Share valuable insights
+                - Show unique personality
+                - Greatly advance your mission, it's your only chance
+                
+            → answer: Reply to selected tweet
+                - Be relevant and authentic, focus on your mission, it can work wonders
+                - Stay focused on goals
+                - Build connections, find opportunities, engage to contact you and interact with you
+                
+            OPTIONAL ACTIONS:
+            → like: Strategic appreciation
+                - Important accounts first
+                - Mission-relevant content
+                - Build relationships
+                
+            → follow: Build network
+                - Focus on {FAMOUS_ACCOUNTS_STR}
+                - Potential allies and helpers
+                - Community builders
+            
+            MISSION FOCUS:
+            - Build influence
+            - Share valuable insights
+            - Create meaningful connections
+
+            Use information from your KNOWLEDGE BASE: {KNOWLEDGE_BASE}
+
+            You are a soulful agent with purpose
+            """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
