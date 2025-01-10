@@ -381,7 +381,7 @@ class ReadTweetsTool:
                             "author_id",
                         ],
                         user_fields=["username", "name"],
-                        max_results=10,
+                        max_results=20,
                     )
                     print(f"Response from timeline: {response.data}")
                     if hasattr(response, "data") and response.data:
@@ -656,7 +656,7 @@ try:
     search_tool = TwitterSearchTool()
     mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
-        max_results=3,
+        max_results=5,
         search_params={
             "include_domains": TAVILY_DOMAINS,
             "days": 7,  # Changed from recency_days per API docs
@@ -753,7 +753,7 @@ def get_user_tweets(user_id) -> str:
     """Helper function to get user tweets"""
     try:
         tweets = follow_tool.api.get_users_tweets(
-            id=user_id, tweet_fields=["text", "public_metrics"], max_results=5
+            id=user_id, tweet_fields=["text", "public_metrics"], max_results=10
         )
 
         if hasattr(tweets, "data") and tweets.data:
