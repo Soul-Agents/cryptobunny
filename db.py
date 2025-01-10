@@ -813,3 +813,14 @@ class TweetDB:
             print(f"Error checking if tweet is replied: {e}")
             return False
         print("MongoDB connection closed")  # Keep only this print statement
+
+    def get_recent_tweets(self, hours=24):
+        """Get tweets from the last specified hours"""
+        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        
+        # Changed tweets_collection to tweets
+        recent_tweets = self.tweets.find({
+            'created_at': {'$gte': cutoff_time}
+        }).sort('created_at', -1)
+        
+        return list(recent_tweets)
