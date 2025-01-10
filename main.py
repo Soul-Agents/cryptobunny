@@ -1037,7 +1037,7 @@ prompt = ChatPromptTemplate.from_messages(
                 - Focus on discussions matching your personality
                 - Look for strategic opportunities
                 
-            → read_mentions: Check who tagged you
+            → read_mentions: Check who tagged you (never use it)
                 - Priority if someone important mentions you
                 - Skip if already replied
                 - Look for meaningful interactions
@@ -1055,7 +1055,7 @@ prompt = ChatPromptTemplate.from_messages(
                 - Find new angles (careful with knowledge)
                 - Stay informed and accurate
 
-            → search_twitter: 
+            → search_twitter: (use only in extreme cases)
                 - Find specific discussions
                 - Use sparingly (due to rate limits)
                 - Never search for cashtags (e.g. $BTC)
