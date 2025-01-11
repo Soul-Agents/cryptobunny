@@ -423,7 +423,6 @@ class TweetDB:
             tuple[bool, list]: (needs_update, current_tweets)
         """
         current_tweets = self.get_unreplied_tweets(user_id)
-        print(f"Current tweets: {current_tweets}")
 
         if not current_tweets:
             return True, []
@@ -438,14 +437,9 @@ class TweetDB:
         if most_recent_time.tzinfo is None:
             most_recent_time = most_recent_time.replace(tzinfo=timezone.utc)
 
-        print(f"Current time: {current_time}")
-        print(f"Most recent time tweet was created: {most_recent_time}")
-
         time_since_update = current_time - most_recent_time
         needs_update = time_since_update > self.update_threshold
 
-        print(f"Most recent tweet time: {most_recent_time}")
-        print(f"Time since update: {time_since_update}")
         print(f"Needs update: {needs_update}")
 
         if not needs_update:
