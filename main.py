@@ -383,7 +383,6 @@ class ReadTweetsTool:
                         user_fields=["username", "name"],
                         max_results=20,
                     )
-                    print(f"Response from timeline: {response.data}")
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
                             Tweet(
@@ -517,7 +516,7 @@ class ReadMentionsTool:
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
             bearer_token=BEARER_TOKEN,
-            wait_on_rate_limit=False,
+            wait_on_rate_limit=True,
         )
 
     def _run(self) -> list:
