@@ -33,7 +33,10 @@ from variables import (
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
-from deepseek import DeepSeekChat
+from openai import OpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from typing import List, Optional, Any, Dict
 
 # Load environment variables
 load_dotenv(override=True)
@@ -122,12 +125,13 @@ def initialize_llm(model_config):
             generation_config=generation_config,
         )
     elif model_config["type"] == "deepseek":
-        return DeepSeekChat(
+        return ChatOpenAI(
             model="deepseek-chat",
-            api_key=DEEPSEEK_API_KEY,
-            temperature=model_config.get("temperature", 0.0),
+            temperature=model_config.get("temperature", 0.7),
             top_p=model_config.get("top_p", 0.95),
             max_tokens=model_config.get("max_tokens", 4096),
+            api_key=DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com"
         )
     else:
         raise ValueError(f"Unknown model type: {model_config['type']}")
