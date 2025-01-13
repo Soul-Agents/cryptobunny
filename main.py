@@ -37,6 +37,9 @@ from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
+from langchain.memory import ConversationBufferMemory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain.memory import ChatMessageHistory
 
 # Load environment variables
 load_dotenv(override=True)
@@ -1155,32 +1158,52 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 agent = create_tool_calling_agent(llm, tools, prompt)
-# endregion
 
+# region Memory Configuration
+def get_memory(session_id: str = "default") -> ChatMessageHistory:
+    """Initialize or retrieve chat memory for the given session"""
+    return ChatMessageHistory(session_id=session_id)
 
-# region Service Execution
-def run_crypto_agent(question: str):
+# Create memory instance
+memory = ConversationBufferMemory(
+    memory_key="chat_history",
+    return_messages=True,
+    output_key="output"
+)
 
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
-    )
+# Modify the agent executor creation (replace existing agent_executor definition)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    verbose=True,
+    handle_parsing_errors=True,
+    max_iterations=10,
+    memory=memory  # Add memory here
+)
 
+# Wrap the agent executor with message history
+agent_with_chat_history = RunnableWithMessageHistory(
+    agent_executor,
+    get_memory,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+)
+
+# Modify the run_crypto_agent function
+def run_crypto_agent(question: str, session_id: str = "default"):
     try:
-        response = agent_executor.invoke(
-            {
-                "input": question,
-            }
+        response = agent_with_chat_history.invoke(
+            {"input": question},
+            config={"configurable": {"session_id": session_id}}
         )
+        
         if "Already replied to this mention" in str(response):
             # Try again with a new action
-            return agent_executor.invoke(
+            return agent_with_chat_history.invoke(
                 {
                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
-                }
+                },
+                config={"configurable": {"session_id": session_id}}
             )
 
         # Clean up the output by only returning the 'output' field
@@ -1192,11 +1215,12 @@ def run_crypto_agent(question: str):
         print(f"Error in agent execution: {str(e)}")
         return {"error": str(e)}
 
-
+# Modify the main execution block
 if __name__ == "__main__":
     try:
+        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         question = random.choice(QUESTION)
-        response = run_crypto_agent(question)
+        response = run_crypto_agent(question, session_id)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
