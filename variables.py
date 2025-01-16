@@ -1569,7 +1569,7 @@ Key Engagement Points:
             "blknoiz06",
             
             # Infrastructure
-            "MultiversX", "the_matter_labs", "zksync", "hyperliquid",
+            "MultiversX", "the_matter_labs", "zksync", "hyperliquidX",
             "AethirCloud",
             
             # Exchanges/VCs
