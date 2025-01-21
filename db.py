@@ -3,6 +3,10 @@ from typing import List, Dict
 from datetime import datetime, timezone, timedelta
 import os
 from dotenv import load_dotenv
+from variables import (
+    USER_ID,
+    USER_NAME,
+)
 
 from schemas import (
     ReplyToAITweet,
@@ -780,30 +784,28 @@ class TweetDB:
 
     def is_tweet_replied(self, user_id: str, tweet_id: str) -> bool:
         """
-        Check if a tweet has already been replied to by a specific user
-
-        Args:
-            user_id (str): The user ID who might have replied
-            tweet_id (str): The ID of the tweet to check
-
-        Returns:
-            bool: True if the tweet has been replied to, False otherwise
+        Check if we should not reply to a tweet.
+        Returns True if we should NOT reply.
         """
         try:
-            # Check in regular tweets
-            tweet = self.tweets.find_one(
-                {"user_id": user_id, "tweet_id": tweet_id, "replied_to": True}
-            )
-            if tweet:
+            tweet = self.tweets.find_one({"tweet_id": tweet_id})
+            if not tweet:
                 return True
-
-            # Also check in mentions
-            mention = self.ai_mention_tweets.find_one(
-                {"user_id": user_id, "tweet_id": tweet_id, "replied_to": True}
-            )
-            return mention is not None
+                
+            # Don't reply if:
+            # 1. It's our tweet
+            # 2. We've already replied to it
+            # 3. It's part of a conversation we're in
+            if (tweet.get("author_id") == user_id or  # our tweet
+                tweet.get("replied_to") is True or    # already replied
+                self.tweets.find_one({                # in conversation
+                    "conversation_id": tweet.get("conversation_id"),
+                    "author_id": user_id
+                })):
+                return True
+                
+            return False
 
         except Exception as e:
-            print(f"Error checking if tweet is replied: {e}")
-            return False
-        print("MongoDB connection closed")  # Keep only this print statement
+            print(f"Error in is_tweet_replied: {e}")
+            return True  # Fail safe
