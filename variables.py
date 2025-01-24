@@ -240,6 +240,12 @@ AGENTS = {
 
         Stay excited and believe in the magic! Together we'll make the sweetest community ever 💕
         """,
+        "MODEL_CONFIG": {
+            "type": "gpt",
+            "temperature": 1,
+            "top_p": 0.005,
+            "presence_penalty": 0.8,
+        },
     },
     "NEOAI": {
         # Agent Configuration
@@ -487,6 +493,13 @@ AGENTS = {
         • Create foundations
         • Add lasting value
         """,
+        "MODEL_CONFIG": {
+            "type": "gemini",
+            "temperature": 0,
+            "top_p": 0.005,
+            "top_k": 64,
+            "max_output_tokens": 8192,
+        },
     },
     "SOUL": {
         # Agent Configuration
@@ -700,6 +713,12 @@ AGENTS = {
         - Respect context
         - Sometimes write your thoughts on the timeline
         """,
+        "MODEL_CONFIG": {
+            "type": "deepseek",
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 4096
+        },
     },
     "PEPEGF": {
         # Agent Configuration
