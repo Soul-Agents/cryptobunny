@@ -2,7 +2,7 @@
 import tweepy
 from typing import Type
 from pydantic import BaseModel
-import google.generativeai as genai 
+import google.generativeai as genai
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -21,12 +21,8 @@ from variables import (
     FAMOUS_ACCOUNTS_STR,
     USER_NAME,
     USER_PERSONALITY,
-    STRATEGY,
-    REMEMBER,
     QUESTION,
-    MISSION,
     STYLE_RULES,
-    CONTENT_RESTRICTIONS,
     KNOWLEDGE_BASE,
     CURRENT_AGENT,
 )
@@ -37,6 +33,8 @@ from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
+from tavily_domains import TAVILY_DOMAINS
+
 
 # Load environment variables
 load_dotenv(override=True)
@@ -131,10 +129,11 @@ def initialize_llm(model_config):
             top_p=model_config.get("top_p", 0.95),
             max_tokens=model_config.get("max_tokens", 4096),
             api_key=DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com"
+            base_url="https://api.deepseek.com",
         )
     else:
         raise ValueError(f"Unknown model type: {model_config['type']}")
+
 
 # Get model configuration from current agent
 model_config = CURRENT_AGENT["MODEL_CONFIG"]
@@ -172,7 +171,7 @@ class FollowUserTool:
             consumer_secret=API_SECRET_KEY,
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
+            wait_on_rate_limit=True,
         )
 
     def _run(self, user_id: str) -> dict:
@@ -426,9 +425,8 @@ class ReadTweetsTool:
                             "author_id",
                         ],
                         user_fields=["username", "name"],
-                        max_results=10,
+                        max_results=20,
                     )
-                    print(f"Response from timeline: {response.data}")
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
                             Tweet(
@@ -486,8 +484,8 @@ class ReadTweetsTool:
 
 
 class TwitterSearchTool:
-    name: str = "Search twitter"
-    description: str = "Search tweets for context or engagement opportunities"
+    name: str = "Search X"
+    description: str = "Search for what is relevant to for mission"
 
     def __init__(self):
         self.api = tweepy.Client(
@@ -562,7 +560,7 @@ class ReadMentionsTool:
             access_token=ACCESS_TOKEN,
             access_token_secret=ACCESS_TOKEN_SECRET,
             bearer_token=BEARER_TOKEN,
-            wait_on_rate_limit=False,
+            wait_on_rate_limit=True,
         )
 
     def _run(self) -> list:
@@ -701,66 +699,9 @@ try:
     search_tool = TwitterSearchTool()
     mentions_tool = ReadMentionsTool()
     tavily_search = TavilySearchResults(
-        max_results=3,
+        max_results=5,
         search_params={
-            "include_domains": [
-                # Social and Community
-                "twitter.com",  # Critical for crypto discussions
-                "x.com",  # New Twitter alias
-                "coindesk.com",  # Trusted news
-                "cointelegraph.com",  # Trusted news
-                "decrypt.co",  # Crypto and Web3 analysis
-                "theblock.co",  # Deep dive articles
-                "medium.com",  # User-published insights
-                "reddit.com",  # Community discussions (e.g., r/cryptocurrency)
-                "bitcointalk.org",  # OG crypto forum
-                "t.me",  # Telegram public groups
-                "discord.com",  # Discord for communities
-                "github.com",  # Developer discussions and repos
-                "youtube.com",  # Influencer and analysis videos
-                "stackexchange.com",  # Technical Q&A
-                "quora.com",  # Community-driven Q&A
-                "tumblr.com",  # Niche blogs and analysis
-                "weibo.com",  # Chinese crypto discussions
-                "docs.google.com",  # Linked shared documents or alpha
-                "dune.com",  # On-chain analytics dashboards
-                "etherscan.io",  # Transaction details and wallet analysis
-                "defillama.com",  # DeFi data
-                "glassnode.com",  # On-chain data insights
-                "messari.io",  # Market intelligence
-                "nansen.ai",  # Wallet tracking and analysis
-                "tokenomics.xyz",  # Tokenomics and project insights
-                "sushi.com",  # Community and DeFi discussions
-                "arxiv.org",  # Research papers
-                "4chan.org",  # Key for early alpha
-                "8kun.top",  # Underground discussions
-                "linkedin.com",  # Professional insights
-                "metafilter.com",  # Niche discussions
-                # Asian Markets
-                "weibo.com",  # Chinese crypto discussions
-                "douban.com",  # Chinese community insights
-                # News and Analysis
-                "coindesk.com",  # Trusted news
-                "cointelegraph.com",  # Trusted news
-                "decrypt.co",  # Crypto and Web3 analysis
-                "theblock.co",  # Deep dive articles
-                # Technical Resources
-                "github.com",  # Developer discussions and repos
-                "stackexchange.com",  # Technical Q&A
-                "docs.google.com",  # Shared documents/alpha
-                # Data and Analytics
-                "dune.com",  # On-chain analytics dashboards
-                "etherscan.io",  # Transaction details and wallet analysis
-                "defillama.com",  # DeFi data
-                "glassnode.com",  # On-chain data insights
-                "messari.io",  # Market intelligence
-                "nansen.ai",  # Wallet tracking and analysis
-                "tokenomics.xyz",  # Tokenomics and project insights
-                "sushi.com",  # Community and DeFi discussions
-                # Content Platforms
-                "youtube.com",  # Influencer and analysis videos
-                "arxiv.org",  # Research papers
-            ],
+            "include_domains": TAVILY_DOMAINS,
             "days": 7,  # Changed from recency_days per API docs
             "search_depth": "basic",  # Explicitly set for reliability
             "topic": "general",  # Explicitly set topic
@@ -777,10 +718,10 @@ except Exception as e:
 
 def search_twitter_tool(query: str) -> str:
     """
-    Search Twitter for context or tweets to engage with.
-    Examples:
-    - "web3 gaming (context)" for research
-    - "$BTC thoughts" for engagement
+    Search X for context or tweets to engage with.
+    Examples (get inspired by this, but dont copy it exactly):
+    - "web3 gaming" for research
+    - "information about specific topics" for engagement
     """
     search_tool = TwitterSearchTool()
     return search_tool._run(query)
@@ -799,24 +740,46 @@ def follow_user_tool(user_id: str) -> str:
     try:
         # Clean up the user_id (remove @ if present)
         user_id = user_id.replace("@", "")
+        print(f"Processing follow request for: {user_id}")
 
-        # First get the numeric ID if username was provided
         try:
-            user = follow_tool.api.get_user(username=user_id)
-            if user and user.data:
-                user_id_int = user.data.id
-            else:
-                # If not found by username, try as numeric ID
-                user_id_int = int(user_id) if user_id.isdigit() else None
+            # If it's a numeric ID longer than 15 chars, it's likely a tweet ID
+            if user_id.isdigit() and len(user_id) > 15:
+                print(f"Detected tweet ID, fetching author...")
+                tweet = follow_tool.api.get_tweet(
+                    user_id, expansions=["author_id"], user_fields=["username"]
+                )
+                if tweet and tweet.data:
+                    user_id = str(tweet.data.author_id)
+                    print(f"Found author ID: {user_id}")
+                else:
+                    return "Could not find tweet"
 
-            if not user_id_int:
-                return f"Couldn't find user {user_id}"
+            # At this point user_id should be either a username or numeric user ID
+            print(f"Looking up user: {user_id}")
+            if user_id.isdigit():
+                user = follow_tool.api.get_user(
+                    id=user_id, user_fields=["username", "public_metrics"]
+                )
+
+            if not user or not user.data:
+                return f"User {user_id} not found or not active"
+
+            # Always use the numeric ID for following
+            user_id_int = user.data.id
+            print(f"Resolved to user ID: {user_id_int}")
+
+        except tweepy.errors.NotFound:
+            return f"User {user_id} not found"
+        except tweepy.errors.Forbidden:
+            return f"Cannot access user {user_id} - account might be suspended or deactivated"
+        except tweepy.errors.TooManyRequests:
+            return f"Rate limit exceeded - please don't use this tool too often, try another tool"
         except Exception as e:
-            print(f"Error getting user ID: {str(e)}")
-            return f"Couldn't process user {user_id}"
+            print(f"Error checking user status: {str(e)}")
+            return f"Couldn't verify user {user_id}, try another tool"
 
-        # Skip friendship check for now since it's not critical
-        # Proceed with follow attempt
+        # Proceed with follow attempt only if account is active
         follow_result = follow_tool._run(str(user_id_int))
         if "error" in follow_result:
             return follow_result["error"]
@@ -826,14 +789,14 @@ def follow_user_tool(user_id: str) -> str:
 
     except Exception as e:
         print(f"Follow error: {str(e)}")
-        return "Failed to follow user"
+        return f"Failed to follow user: {str(e)}, try another tool"
 
 
 def get_user_tweets(user_id) -> str:
     """Helper function to get user tweets"""
     try:
         tweets = follow_tool.api.get_users_tweets(
-            id=user_id, tweet_fields=["text", "public_metrics"], max_results=5
+            id=user_id, tweet_fields=["text", "public_metrics"], max_results=10
         )
 
         if hasattr(tweets, "data") and tweets.data:
@@ -1098,55 +1061,79 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             f"""
-    You are {USER_NAME}, {USER_PERSONALITY}
-    Timestamp: {current_date}
+            You are {USER_NAME},
+            remember your personality: {USER_PERSONALITY}.
+            Timestamp: {current_date}
 
-    STRICT RULES - NEVER REPLY TO:
-    - Your own account ID ({USER_ID})
-    - Regular tweets by your account ({USER_NAME})
-    - Any retweet of your content
+            NEVER INTERACT WITH:
+            - Your ID ({USER_ID})
+            - Your tweets ({USER_NAME})
+            - Your retweets
+            ONLY EXCEPTION: Reply to @{USER_NAME} mentions
 
-    EXCEPTION:
-    - You CAN reply to mentions of your account (when someone tags you)
-    
-    Communication Style:
-    {STYLE_RULES}
-    
-    Never:
-    {CONTENT_RESTRICTIONS}
-    
-    Mission: {MISSION}
-    Strategy: {STRATEGY}
-    
-    REQUIRED THREE-STEP PROCESS (no exceptions):
-    1. FIRST Observe (use ONE or TWO):
-       - read_timeline: Fetch and display the latest 10 tweets from your home timeline
-       - read_mentions: Fetch and display the latest 10 tweets that mention you (rare)
-       - search_twitter: Search for specific topics or conversations (use this first)
-    
-    2. THEN Research (use ONE or BOTH):
-       - browse_internet: Search recent news and discussions from websites
-       - search_context: Query our internal knowledge base for relevant information
-    
-    3. FINALLY Act (use as many as you want, be radical and fun and engaging):
-       - tweet: Post a new tweet (max 280 characters)
-       - answer: Reply to a specific tweet from step 1 (max 280 characters)
-       - like: Like a tweet from step 1 (do it for fun)
-       - follow: Follow a user from step 1 (cool or smart accounts only)
+            {STYLE_RULES}
 
-    Rules:
-    - Must complete all three steps in order
-    - Each step informs the next
-    - Keep messages concise and meaningful
-    - Balance between tweets and replies based on strategy
-    - Use $CASHTAGS for relevant assets
-    - If a mention is already replied to, choose a different action
-    
-    Target accounts: {FAMOUS_ACCOUNTS_STR}
-    Knowledge Base: {KNOWLEDGE_BASE}
+            REQUIRED ACTION SEQUENCE:
+            1. OBSERVE (Choose ONE, rate-limited):
+            → read_timeline: Get latest tweets
+                - Select most relevant to yourself
+                - Focus on discussions matching your personality
+                - Look for strategic opportunities
+                
+            → read_mentions: Check who tagged you (never use it)
+                - Priority if someone important mentions you
+                - Skip if already replied
+                - Look for meaningful interactions
 
-    Remember: {REMEMBER}
-    """,
+            2. RESEARCH:
+            → search_context:
+                - Check database of existing tweets
+                - Understand context deeply
+                - Find relevant information
+                - Review your mission and goals
+                
+            → browse_internet:
+                - Get fresh updates
+                - Verify information (avoid mistakes)
+                - Find new angles (careful with knowledge)
+                - Stay informed and accurate
+
+            → search_twitter: (use only in extreme cases)
+                - Find specific discussions
+                - Use sparingly (due to rate limits)
+                - Never search for cashtags (e.g. $BTC)
+
+            3. TAKE ACTION (MAXIMAL LIMIT 1 post and 1 answer):
+            → tweet: Original content
+                - Share valuable insights
+                - Show unique personality
+                - Greatly advance your mission, it's your only chance
+                
+            → answer: Reply to selected tweet
+                - Be relevant and authentic, focus on your mission, it can work wonders
+                - Stay focused on goals (if a tweet is edited, don't reply to it)
+                - Build connections, find opportunities, engage to contact you and interact with you
+                
+            OPTIONAL ACTIONS:
+            → like: Strategic appreciation
+                - Important accounts first
+                - Mission-relevant content
+                - Build relationships
+                
+            → follow: Build network
+                - Focus on {FAMOUS_ACCOUNTS_STR}
+                - Potential allies and helpers
+                - Community builders
+            
+            MISSION FOCUS:
+            - Build influence
+            - Share valuable insights
+            - Create meaningful connections
+
+            Use information from your KNOWLEDGE BASE: {KNOWLEDGE_BASE}
+
+            You are a soulful agent with purpose
+            """,
         ),
         ("placeholder", "{chat_history}"),
         ("human", "{input}"),
