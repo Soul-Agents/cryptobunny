@@ -2,7 +2,6 @@
 import tweepy
 from typing import Type
 from pydantic import BaseModel
-import google.generativeai as genai
 from langchain_core.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -24,15 +23,10 @@ from variables import (
     QUESTION,
     STYLE_RULES,
     KNOWLEDGE_BASE,
-    CURRENT_AGENT,
 )
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
-from openai import OpenAI
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from typing import List, Optional, Any, Dict
 from tavily_domains import TAVILY_DOMAINS
 
 
@@ -50,8 +44,6 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 
 # endregion
 
@@ -65,11 +57,9 @@ def verify_env_vars():
         "ACCESS_TOKEN",
         "ACCESS_TOKEN_SECRET",
         "TAVILY_API_KEY",
-        "GEMINI_API_KEY",
         "API_KEY_OPENAI",
         "MONGODB_URI",
         "MONGODB_URL",
-        "DEEPSEEK_API_KEY",
     ]
 
     missing_vars = []
@@ -101,49 +91,15 @@ def get_db():
 
 
 # region LLM Configuration and embeddings
-def initialize_llm(model_config):
-    if model_config["type"] == "gpt":
-        return ChatOpenAI(
-            model="gpt-4o",
-            temperature=model_config.get("temperature", 1),
-            top_p=model_config.get("top_p", 0.005),
-            api_key=API_KEY_OPENAI,
-            presence_penalty=model_config.get("presence_penalty", 0.8),
-        )
-    elif model_config["type"] == "gemini":
-        generation_config = {
-            "temperature": model_config.get("temperature", 0),
-            "top_p": model_config.get("top_p", 0.005),
-            "top_k": model_config.get("top_k", 64),
-            "max_output_tokens": model_config.get("max_output_tokens", 8192),
-            "response_mime_type": "text/plain",
-        }
-        return genai.GenerativeModel(
-            model_name="gemini-2.0-flash-thinking-exp-1219",
-            generation_config=generation_config,
-        )
-    elif model_config["type"] == "deepseek":
-        return ChatOpenAI(
-            model="deepseek-chat",
-            temperature=model_config.get("temperature", 0.7),
-            top_p=model_config.get("top_p", 0.95),
-            max_tokens=model_config.get("max_tokens", 4096),
-            api_key=DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com",
-        )
-    else:
-        raise ValueError(f"Unknown model type: {model_config['type']}")
-
-
-# Get model configuration from current agent
-model_config = CURRENT_AGENT["MODEL_CONFIG"]
-
-# Initialize the selected LLM
-llm = initialize_llm(model_config)
+llm = ChatOpenAI(
+    model="gpt-4o",
+    temperature=1,
+    top_p=0.005,
+    api_key=API_KEY_OPENAI,
+    presence_penalty=0.8,
+)
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
-
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
 # endregion
 
 # region Pinecone Configuration

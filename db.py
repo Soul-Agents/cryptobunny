@@ -791,36 +791,21 @@ class TweetDB:
             tweet = self.tweets.find_one({"tweet_id": tweet_id})
             if not tweet:
                 return True
-
+                
             # Don't reply if:
             # 1. It's our tweet
             # 2. We've already replied to it
             # 3. It's part of a conversation we're in
-            if (
-                tweet.get("author_id") == user_id  # our tweet
-                or tweet.get("replied_to") is True  # already replied
-                or self.tweets.find_one(
-                    {  # in conversation
-                        "conversation_id": tweet.get("conversation_id"),
-                        "author_id": user_id,
-                    }
-                )
-            ):
+            if (tweet.get("author_id") == user_id or  # our tweet
+                tweet.get("replied_to") is True or    # already replied
+                self.tweets.find_one({                # in conversation
+                    "conversation_id": tweet.get("conversation_id"),
+                    "author_id": user_id
+                })):
                 return True
-
+                
             return False
 
         except Exception as e:
             print(f"Error in is_tweet_replied: {e}")
             return True  # Fail safe
-
-    def get_recent_tweets(self, hours=24):
-        """Get tweets from the last specified hours"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
-
-        # Changed tweets_collection to tweets
-        recent_tweets = self.tweets.find({"created_at": {"$gte": cutoff_time}}).sort(
-            "created_at", -1
-        )
-
-        return list(recent_tweets)
