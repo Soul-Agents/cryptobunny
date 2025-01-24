@@ -17,7 +17,7 @@ index = pc.Index(os.getenv("PINECONE_INDEX_NAME"))
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 os.environ["MONGODB_URL"]
 
-# Init db and get relevant functions
+# Init db and get relevant fuctions
 db = TweetDB()
 most_recent_id = db.get_most_recent_tweet_id()
 tweets = db.get_all_tweets()
@@ -51,12 +51,10 @@ else:
         doc = Document(page_content=tweet["text"], metadata=metadata)
         docs.append(doc)
 
-print(f"Created {len(docs)} documents")
-
-# Split documents if needed and create vectors
-text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-texts = text_splitter.split_documents(docs)
-print(f"Split into {len(texts)} text chunks")
+    # Only process if we have new documents
+    if docs:
+        text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+        texts = text_splitter.split_documents(docs)
 
         vectorstore_from_docs = PineconeVectorStore.from_documents(
             texts, index_name="soulsagent", embedding=embeddings
