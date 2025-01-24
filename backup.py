@@ -1,5 +1,3 @@
-
-
 # def answer_tweet_with_context_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 #     """Search for relevant context and reply to a tweet using that context."""
 #     try:
@@ -11,7 +9,7 @@
 #             print(f"Document {i + 1}:")
 #             print(doc.page_content)
 #             print("---")
-        
+
 #         # Extract context from the retrieved documents
 #         context = "\n".join([doc.page_content for doc in relevant_docs]) if relevant_docs else ""
 #         print("\n=== Assembled Context ===")
@@ -28,20 +26,20 @@
 #         print("\n=== Enhanced Tweet Text ===")
 #         print(enhanced_tweet_text)
 #         print("---")
-        
+
 #         # Use the existing answer tool to post the reply
 #         result = answer_tool._run(tweet_id=tweet_id, tweet_text=enhanced_tweet_text, message=message)
-        
+
 #         if "error" in result:
 #             return result["error"]
-            
+
 #         return result.get("message", "Reply sent successfully")
 #     except Exception as e:
 #         return f"An error occurred replying to tweet with context: {str(e)}"
 
 
 # # answer_with_context_tool_wrapped = StructuredTool.from_function(
-# #    func=answer_tweet_with_context_tool,   
+# #    func=answer_tweet_with_context_tool,
 # #    name="answer_with_context",
 # #    description="Reply to tweets using retrieved context to enhance your answer",
 # # )
