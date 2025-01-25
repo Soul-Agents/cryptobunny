@@ -40,6 +40,7 @@ from typing import List, Optional, Any, Dict
 from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.memory import ChatMessageHistory
+import requests
 
 # Load environment variables
 load_dotenv(override=True)
@@ -57,6 +58,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+GROK_API_KEY = os.getenv("GROK_API_KEY")
 
 # endregion
 
@@ -75,6 +77,7 @@ def verify_env_vars():
         "MONGODB_URI",
         "MONGODB_URL",
         "DEEPSEEK_API_KEY",
+        "GROK_API_KEY",
     ]
 
     missing_vars = []
@@ -114,6 +117,14 @@ def initialize_llm(model_config):
             top_p=model_config.get("top_p", 0.005),
             api_key=API_KEY_OPENAI,
             presence_penalty=model_config.get("presence_penalty", 0.8),
+        )
+    elif model_config["type"] == "grok":
+        return ChatOpenAI(
+            model="grok-2-latest",
+            temperature=model_config.get("temperature", 0.7),
+            top_p=model_config.get("top_p", 0.95),
+            api_key=GROK_API_KEY,
+            base_url="https://api.x.ai/v1"
         )
     elif model_config["type"] == "gemini":
         generation_config = {
