@@ -23,11 +23,11 @@ from variables import (
     QUESTION,
     STYLE_RULES,
     KNOWLEDGE_BASE,
+    CURRENT_AGENT,
 )
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
-<<<<<<< HEAD
 from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -36,10 +36,6 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.memory import ChatMessageHistory
 import requests
-=======
-from tavily_domains import TAVILY_DOMAINS
-
->>>>>>> master
 
 # Load environment variables
 load_dotenv(override=True)
@@ -55,12 +51,9 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
-<<<<<<< HEAD
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
-=======
->>>>>>> master
 
 # endregion
 
@@ -77,11 +70,8 @@ def verify_env_vars():
         "API_KEY_OPENAI",
         "MONGODB_URI",
         "MONGODB_URL",
-<<<<<<< HEAD
         "DEEPSEEK_API_KEY",
         "GROK_API_KEY",
-=======
->>>>>>> master
     ]
 
     missing_vars = []
@@ -113,7 +103,6 @@ def get_db():
 
 
 # region LLM Configuration and embeddings
-<<<<<<< HEAD
 def initialize_llm(model_config):
     if model_config["type"] == "gpt":
         return ChatOpenAI(
@@ -129,7 +118,7 @@ def initialize_llm(model_config):
             temperature=model_config.get("temperature", 0.7),
             top_p=model_config.get("top_p", 0.95),
             api_key=GROK_API_KEY,
-            base_url="https://api.x.ai/v1"
+            base_url="https://api.x.ai/v1",
         )
     elif model_config["type"] == "gemini":
         generation_config = {
@@ -150,25 +139,17 @@ def initialize_llm(model_config):
             top_p=model_config.get("top_p", 0.95),
             max_tokens=model_config.get("max_tokens", 4096),
             api_key=DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com"
+            base_url="https://api.deepseek.com",
         )
     else:
         raise ValueError(f"Unknown model type: {model_config['type']}")
+
 
 # Get model configuration from current agent
 model_config = CURRENT_AGENT["MODEL_CONFIG"]
 
 # Initialize the selected LLM
 llm = initialize_llm(model_config)
-=======
-llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=1,
-    top_p=0.005,
-    api_key=API_KEY_OPENAI,
-    presence_penalty=0.8,
-)
->>>>>>> master
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
 # endregion
@@ -1170,16 +1151,16 @@ prompt = ChatPromptTemplate.from_messages(
 
 agent = create_tool_calling_agent(llm, tools, prompt)
 
+
 # region Memory Configuration
 def get_memory(session_id: str = "default") -> ChatMessageHistory:
     """Initialize or retrieve chat memory for the given session"""
     return ChatMessageHistory(session_id=session_id)
 
+
 # Create memory instance
 memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    return_messages=True,
-    output_key="output"
+    memory_key="chat_history", return_messages=True, output_key="output"
 )
 
 # Modify the agent executor creation (replace existing agent_executor definition)
@@ -1189,7 +1170,7 @@ agent_executor = AgentExecutor(
     verbose=True,
     handle_parsing_errors=True,
     max_iterations=10,
-    memory=memory  # Add memory here
+    memory=memory,  # Add memory here
 )
 
 # Wrap the agent executor with message history
@@ -1200,21 +1181,21 @@ agent_with_chat_history = RunnableWithMessageHistory(
     history_messages_key="chat_history",
 )
 
+
 # Modify the run_crypto_agent function
 def run_crypto_agent(question: str, session_id: str = "default"):
     try:
         response = agent_with_chat_history.invoke(
-            {"input": question},
-            config={"configurable": {"session_id": session_id}}
+            {"input": question}, config={"configurable": {"session_id": session_id}}
         )
-        
+
         if "Already replied to this mention" in str(response):
             # Try again with a new action
             return agent_with_chat_history.invoke(
                 {
                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
                 },
-                config={"configurable": {"session_id": session_id}}
+                config={"configurable": {"session_id": session_id}},
             )
 
         # Clean up the output by only returning the 'output' field
@@ -1225,6 +1206,7 @@ def run_crypto_agent(question: str, session_id: str = "default"):
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
         return {"error": str(e)}
+
 
 # Modify the main execution block
 if __name__ == "__main__":
