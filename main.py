@@ -14,6 +14,7 @@ from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
 from db_utils import get_db
+from tavily_domains import TAVILY_DOMAINS
 from dotenv import load_dotenv
 from variables import (
     USER_ID,
