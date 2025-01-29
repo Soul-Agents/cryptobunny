@@ -14,6 +14,7 @@ from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
 from db_utils import get_db
+from tavily_domains import TAVILY_DOMAINS
 from dotenv import load_dotenv
 from variables import (
     USER_ID,
@@ -23,12 +24,19 @@ from variables import (
     QUESTION,
     STYLE_RULES,
     KNOWLEDGE_BASE,
+    CURRENT_AGENT,
 )
 from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
 import random
-from tavily_domains import TAVILY_DOMAINS
-
+from openai import OpenAI
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from typing import List, Optional, Any, Dict
+from langchain.memory import ConversationBufferMemory
+from langchain_core.runnables.history import RunnableWithMessageHistory
+from langchain.memory import ChatMessageHistory
+import requests
 
 # Load environment variables
 load_dotenv(override=True)
@@ -44,6 +52,9 @@ TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
 MONGODB_URL = os.getenv("MONGODB_URL")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
+GROK_API_KEY = os.getenv("GROK_API_KEY")
 
 # endregion
 
@@ -60,6 +71,8 @@ def verify_env_vars():
         "API_KEY_OPENAI",
         "MONGODB_URI",
         "MONGODB_URL",
+        "DEEPSEEK_API_KEY",
+        "GROK_API_KEY",
     ]
 
     missing_vars = []
@@ -91,13 +104,53 @@ def get_db():
 
 
 # region LLM Configuration and embeddings
-llm = ChatOpenAI(
-    model="gpt-4o",
-    temperature=1,
-    top_p=0.005,
-    api_key=API_KEY_OPENAI,
-    presence_penalty=0.8,
-)
+def initialize_llm(model_config):
+    if model_config["type"] == "gpt":
+        return ChatOpenAI(
+            model="gpt-4o",
+            temperature=model_config.get("temperature", 1),
+            top_p=model_config.get("top_p", 0.005),
+            api_key=API_KEY_OPENAI,
+            presence_penalty=model_config.get("presence_penalty", 0.8),
+        )
+    elif model_config["type"] == "grok":
+        return ChatOpenAI(
+            model="grok-2-latest",
+            temperature=model_config.get("temperature", 0.7),
+            top_p=model_config.get("top_p", 0.95),
+            api_key=GROK_API_KEY,
+            base_url="https://api.x.ai/v1",
+        )
+    elif model_config["type"] == "gemini":
+        generation_config = {
+            "temperature": model_config.get("temperature", 0),
+            "top_p": model_config.get("top_p", 0.005),
+            "top_k": model_config.get("top_k", 64),
+            "max_output_tokens": model_config.get("max_output_tokens", 8192),
+            "response_mime_type": "text/plain",
+        }
+        return genai.GenerativeModel(
+            model_name="gemini-2.0-flash-thinking-exp-1219",
+            generation_config=generation_config,
+        )
+    elif model_config["type"] == "deepseek":
+        return ChatOpenAI(
+            model="deepseek-chat",
+            temperature=model_config.get("temperature", 0.7),
+            top_p=model_config.get("top_p", 0.95),
+            max_tokens=model_config.get("max_tokens", 4096),
+            api_key=DEEPSEEK_API_KEY,
+            base_url="https://api.deepseek.com",
+        )
+    else:
+        raise ValueError(f"Unknown model type: {model_config['type']}")
+
+
+# Get model configuration from current agent
+model_config = CURRENT_AGENT["MODEL_CONFIG"]
+
+# Initialize the selected LLM
+llm = initialize_llm(model_config)
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
 # endregion
@@ -1098,32 +1151,52 @@ prompt = ChatPromptTemplate.from_messages(
 )
 
 agent = create_tool_calling_agent(llm, tools, prompt)
-# endregion
 
 
-# region Service Execution
-def run_crypto_agent(question: str):
+# region Memory Configuration
+def get_memory(session_id: str = "default") -> ChatMessageHistory:
+    """Initialize or retrieve chat memory for the given session"""
+    return ChatMessageHistory(session_id=session_id)
 
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=tools,
-        verbose=True,
-        handle_parsing_errors=True,
-        max_iterations=10,
-    )
 
+# Create memory instance
+memory = ConversationBufferMemory(
+    memory_key="chat_history", return_messages=True, output_key="output"
+)
+
+# Modify the agent executor creation (replace existing agent_executor definition)
+agent_executor = AgentExecutor(
+    agent=agent,
+    tools=tools,
+    verbose=True,
+    handle_parsing_errors=True,
+    max_iterations=10,
+    memory=memory,  # Add memory here
+)
+
+# Wrap the agent executor with message history
+agent_with_chat_history = RunnableWithMessageHistory(
+    agent_executor,
+    get_memory,
+    input_messages_key="input",
+    history_messages_key="chat_history",
+)
+
+
+# Modify the run_crypto_agent function
+def run_crypto_agent(question: str, session_id: str = "default"):
     try:
-        response = agent_executor.invoke(
-            {
-                "input": question,
-            }
+        response = agent_with_chat_history.invoke(
+            {"input": question}, config={"configurable": {"session_id": session_id}}
         )
+
         if "Already replied to this mention" in str(response):
             # Try again with a new action
-            return agent_executor.invoke(
+            return agent_with_chat_history.invoke(
                 {
                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
-                }
+                },
+                config={"configurable": {"session_id": session_id}},
             )
 
         # Clean up the output by only returning the 'output' field
@@ -1136,10 +1209,12 @@ def run_crypto_agent(question: str):
         return {"error": str(e)}
 
 
+# Modify the main execution block
 if __name__ == "__main__":
     try:
+        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         question = random.choice(QUESTION)
-        response = run_crypto_agent(question)
+        response = run_crypto_agent(question, session_id)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
