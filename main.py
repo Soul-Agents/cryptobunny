@@ -10,6 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone
+import google.generativeai as genai
 from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
