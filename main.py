@@ -10,7 +10,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
 from pinecone import Pinecone
-import google.generativeai as genai
+
+# import google.generativeai as genai
 from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
@@ -122,18 +123,18 @@ def initialize_llm(model_config):
             api_key=GROK_API_KEY,
             base_url="https://api.x.ai/v1",
         )
-    elif model_config["type"] == "gemini":
-        generation_config = {
-            "temperature": model_config.get("temperature", 0),
-            "top_p": model_config.get("top_p", 0.005),
-            "top_k": model_config.get("top_k", 64),
-            "max_output_tokens": model_config.get("max_output_tokens", 8192),
-            "response_mime_type": "text/plain",
-        }
-        return genai.GenerativeModel(
-            model_name="gemini-2.0-flash-thinking-exp-1219",
-            generation_config=generation_config,
-        )
+    # elif model_config["type"] == "gemini":
+    #     generation_config = {
+    #         "temperature": model_config.get("temperature", 0),
+    #         "top_p": model_config.get("top_p", 0.005),
+    #         "top_k": model_config.get("top_k", 64),
+    #         "max_output_tokens": model_config.get("max_output_tokens", 8192),
+    #         "response_mime_type": "text/plain",
+    #     }
+    #     return genai.GenerativeModel(
+    #         model_name="gemini-2.0-flash-thinking-exp-1219",
+    #         generation_config=generation_config,
+    #     )
     elif model_config["type"] == "deepseek":
         return ChatOpenAI(
             model="deepseek-chat",
