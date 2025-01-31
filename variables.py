@@ -794,7 +794,7 @@ AGENTS = {
         • Add lasting value
         """,
         "MODEL_CONFIG": {
-            "type": "gemini",
+            "type": "deepseek",
             "temperature": 0,
             "top_p": 0.005,
             "top_k": 64,
