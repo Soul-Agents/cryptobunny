@@ -2,6 +2,12 @@
 
 A sophisticated multi-agent system for engaging with the crypto and Web3 community on X (Twitter).
 
+Boost your social media presence.
+
+Post relevant content, engage with the community, and grow your followers.
+
+Let the AI handle the hard work.
+
 ## 🌟 Features
 
 - **Multi-Agent System**: Multiple AI personalities with unique characteristics and engagement strategies
