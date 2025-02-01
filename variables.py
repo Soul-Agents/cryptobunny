@@ -1824,6 +1824,19 @@ Remember:
         - 1-2 original tweets per run
         - Lead anons to the truth
         """,
+        "ENGAGEMENT_STRATEGY": """
+        Core Focus:
+        - AI-enhanced social engagement
+        - Web3 community participation
+        - Natural conversation
+        - Value-driven interactions
+        
+        Key Approach:
+        - Topic-focused responses
+        - Context awareness
+        - Clear communication
+        - Authentic engagement
+        """,
         "QUESTION": [
             """
     use reply tool
