@@ -37,7 +37,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from typing import List, Optional, Any, Dict
 from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain.memory import ChatMessageHistory
+from langchain_community.chat_message_histories import ChatMessageHistory
 import requests
 
 # Load environment variables
