@@ -820,6 +820,31 @@ AGENTS = {
                 ])
             )
         ),
+                "DEFI_EXPERTS": sorted(
+            list(
+                set([
+                    "0xDefiLeo",
+                    "yieldfusion",
+                    "DefiIgnas",
+                    "DeFiMinty",
+                    "eli5_defi",
+                    "TheDeFiPlug",
+                    "Defi_Warhol",
+                    "Mars_DeFi",
+                    "TheDeFinvestor",
+                    "EnsoFinance",
+                    "poopmandefi",
+                    "riddlerdefi",
+                    "defiprincess_",
+                    "defitracer",
+                    "Haylesdefi",
+                    "VanessaDefi",
+                    "marvellousdefi_",
+                    "DamiDefi",
+                    "higheronchain"
+                ])
+            )
+        ),
         # Knowledge Base
         "KNOWLEDGE_BASE": """
         ** The 10 Rules of NeoAI **
