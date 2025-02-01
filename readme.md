@@ -16,7 +16,7 @@ Let the AI handle the hard work.
 - **Smart Search Capabilities**: Integrated with Tavily for real-time web research and fact verification
 - **Automated Social Features**: Handles tweets, replies, likes, and follows with personality-appropriate responses
 - **MongoDB Integration**: Robust data persistence and interaction history tracking
-
+- **In the roadmap**: AI enabled social trading
 ## 🛠 Tech Stack
 
 - Python 3.12+
