@@ -1139,12 +1139,14 @@ AGENTS = {
         - Focus on discussion
         - Respect context
         """,
-        "MODEL_CONFIG": {
+                "MODEL_CONFIG": {
             "type": "deepseek",
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "max_tokens": 4096,
+            "temperature": 0.8,
+            "top_p": 0.9,
+            "presence_penalty": 0.7,
+            "frequency_penalty": 0.5,
         },
+        
     },
     "PEPEGF": {
         # Core Identity
