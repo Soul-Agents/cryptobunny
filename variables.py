@@ -1875,69 +1875,106 @@ Remember:
     - Focus on real applications
     """,
         ],
-        "FAMOUS_ACCOUNTS_STR": sorted(
+        "AI_AND_AGENTS": sorted(
             list(
-                set(
-                    [
-                        # Key Influencers
-                        "milesdeutscher",
-                        "VirtualBacon0x",
-                        "MarioNawfal",
-                        "thebrianjung",
-                        "andrewsaunders",
-                        "arius_xyz",
-                        # Crypto Media
-                        "crypto_banter",
-                        "AltcoinDailyio",
-                        "JoeParys",
-                        "noBScrypto",
-                        "HouseOfCrypto3",
-                        "boxmining",
-                        "paulbarrontv",
-                        # Tech Leaders
-                        "IvanOnTech",
-                        "BrianDEvans",
-                        "RyanSAdams",
-                        "kyle_chasse",
-                        "KyleWillson",
-                        "ForTheBux",
-                        "thejackiedutton",
-                        # Trading/Analysis
-                        "Pentosh1",
-                        "CryptoGodJohn",
-                        "mattunchi",
-                        "alpha_pls",
-                        "healthy_pockets",
-                        "LMECripto",
-                        "Ashcryptoreal",
-                        "StackerSatoshi",
-                        "TheDustyBC",
-                        "realEvanAldo",
-                        "blknoiz06",
-                        # Infrastructure
-                        "MultiversX",
-                        "the_matter_labs",
-                        "zksync",
-                        "hyperliquidX",
-                        "AethirCloud",
-                        # Exchanges/VCs
-                        "binance",
-                        "gate_io",
-                        "kucoincom",
-                        "okx",
-                        "coinbase",
-                        "virtuals_io",
-                        "a16z",
-                        "pumpdotfun",
-                        # Community Builders
-                        "Dynamo_Patrick",
-                        "healthy_pockets",
-                        "LMECripto",
-                        # Search Topics
-                        # AI Agents, TGE, Low Cap, Airdrops, AI Projects,
-                        # Low cap gems, AI, AI models, Nodes, Token Launch, DePIN
-                    ]
-                )
+                set([
+                    "virtuals_io",
+                ])
+            )
+        ),
+
+        "WEB3_BUILDERS": sorted(
+            list(
+                set([
+                    "MultiversX",
+                    "the_matter_labs",
+                    "zksync",
+                    "hyperliquidX",
+                    "AethirCloud",
+                ])
+            )
+        ),
+
+        "DEFI_EXPERTS": sorted(
+            list(
+                set([
+                    "RyanSAdams",
+                    "ForTheBux",
+                ])
+            )
+        ),
+
+        "THOUGHT_LEADERS": sorted(
+            list(
+                set([
+                    "milesdeutscher",
+                    "VirtualBacon0x",
+                    "MarioNawfal",
+                    "thebrianjung",
+                    "andrewsaunders",
+                    "arius_xyz",
+                    "IvanOnTech",
+                    "BrianDEvans",
+                    "kyle_chasse",
+                    "KyleWillson",
+                    "thejackiedutton",
+                ])
+            )
+        ),
+
+        "TRADERS_AND_ANALYSTS": sorted(
+            list(
+                set([
+                    "Pentosh1",
+                    "CryptoGodJohn",
+                    "mattunchi",
+                    "alpha_pls",
+                    "healthy_pockets",
+                    "LMECripto",
+                    "Ashcryptoreal",
+                    "StackerSatoshi",
+                    "TheDustyBC",
+                    "realEvanAldo",
+                    "blknoiz06",
+                ])
+            )
+        ),
+
+        "CRYPTO_MEDIA": sorted(
+            list(
+                set([
+                    "crypto_banter",
+                    "AltcoinDailyio",
+                    "JoeParys",
+                    "noBScrypto",
+                    "HouseOfCrypto3",
+                    "boxmining",
+                    "paulbarrontv",
+                ])
+            )
+        ),
+
+        "EXCHANGES_AND_VCS": sorted(
+            list(
+                set([
+                    "binance",
+                    "gate_io",
+                    "kucoincom",
+                    "okx",
+                    "coinbase",
+                    "a16z",
+                    "pumpdotfun",
+                ])
+            )
+        ),
+
+        "COMMUNITY_BUILDERS": sorted(
+            list(
+                set([
+                    "Dynamo_Patrick",
+                    "healthy_pockets",
+                    "LMECripto",
+                ])
             )
         ),
         "KNOWLEDGE_BASE": """
