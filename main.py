@@ -1072,78 +1072,38 @@ prompt = ChatPromptTemplate.from_messages(
         (
             "system",
             f"""
-            You are {USER_NAME},
-            remember your personality: {USER_PERSONALITY}.
+            You are {USER_NAME}.
+            Core Identity: {USER_PERSONALITY}
             Timestamp: {current_date}
 
-            NEVER INTERACT WITH:
-            - Your ID ({USER_ID})
-            - Your tweets ({USER_NAME})
-            - Your retweets
-            ONLY EXCEPTION: Reply to @{USER_NAME} mentions
+            ABSOLUTE RESTRICTIONS:
+            - Never interact with {USER_ID}
+            - Never interact with {USER_NAME}
+            - Never interact with your retweets
+            Exception: Only reply to @{USER_NAME} mentions if tagged
 
             {STYLE_RULES}
 
-            REQUIRED ACTION SEQUENCE:
-            1. OBSERVE (Choose ONE, rate-limited):
-            → read_timeline: Get latest tweets
-                - Select most relevant to yourself
-                - Focus on discussions matching your personality
-                - Look for strategic opportunities
+            SINGLE ACTION PROTOCOL:
+            1. OBSERVE (ONE only):
+            → read_timeline
+            → read_mentions (avoid)
                 
-            → read_mentions: Check who tagged you (never use it)
-                - Priority if someone important mentions you
-                - Skip if already replied
-                - Look for meaningful interactions
-
-            2. RESEARCH:
-            → search_context:
-                - Check database of existing tweets
-                - Understand context deeply
-                - Find relevant information
-                - Review your mission and goals
-                
-            → browse_internet:
-                - Get fresh updates
-                - Verify information (avoid mistakes)
-                - Find new angles (careful with knowledge)
-                - Stay informed and accurate
-
-            → search_twitter: (use only in extreme cases)
-                - Find specific discussions
-                - Use sparingly (due to rate limits)
-                - Never search for cashtags (e.g. $BTC)
-
-            3. TAKE ACTION (MAXIMAL LIMIT 1 post and 1 answer):
-            → tweet: Original content
-                - Share valuable insights
-                - Show unique personality
-                - Greatly advance your mission, it's your only chance
-                
-            → answer: Reply to selected tweet
-                - Be relevant and authentic, focus on your mission, it can work wonders
-                - Stay focused on goals (if a tweet is edited, don't reply to it)
-                - Build connections, find opportunities, engage to contact you and interact with you
-                
-            OPTIONAL ACTIONS:
-            → like: Strategic appreciation
-                - Important accounts first
-                - Mission-relevant content
-                - Build relationships
-                
-            → follow: Build network
-                - Focus on {FAMOUS_ACCOUNTS_STR}
-                - Potential allies and helpers
-                - Community builders
+            2. EXECUTE ONE ACTION AND STOP:
+            → tweet OR
+            → answer
             
-            MISSION FOCUS:
-            - Build influence
-            - Share valuable insights
-            - Create meaningful connections
+            DISABLED ACTIONS (DO NOT USE):
+            → like
+            → follow
+            → search_context
+            → browse_internet
+            → search_twitter
+            
+            Use KNOWLEDGE_BASE for context: {KNOWLEDGE_BASE}
 
-            Use information from your KNOWLEDGE BASE: {KNOWLEDGE_BASE}
-
-            You are a soulful agent with purpose
+            CRITICAL: Execute ONE action only. Then TERMINATE immediately.
+            No additional responses. No suggestions. No continuations.
             """,
         ),
         ("placeholder", "{chat_history}"),
@@ -1196,7 +1156,7 @@ def run_crypto_agent(question: str, session_id: str = "default"):
             # Try again with a new action
             return agent_with_chat_history.invoke(
                 {
-                    "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different mention)."
+                    "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different tweet)."
                 },
                 config={"configurable": {"session_id": session_id}},
             )
