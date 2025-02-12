@@ -1095,6 +1095,9 @@ prompt = ChatPromptTemplate.from_messages(
             → answer_tool_wrapped
             STOP
             
+            3. END PROTOCOL:
+            → END aka STOP
+
             DISABLED ACTIONS (DO NOT USE):
             → like
             → follow
