@@ -1090,8 +1090,10 @@ prompt = ChatPromptTemplate.from_messages(
             → read_mentions (avoid)
                 
             2. EXECUTE ONE ACTION AND STOP:
-            → tweet OR
-            → answer
+            → tweet_tool_wrapped
+            OR
+            → answer_tool_wrapped
+            STOP
             
             DISABLED ACTIONS (DO NOT USE):
             → like
