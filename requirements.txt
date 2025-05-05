@@ -9,4 +9,4 @@ google-generativeai>=0.3.0
 pinecone-client>=2.2.2
 tavily-python>=0.2.6
 uuid>=1.30
-deepseek-ai>=0.3.0
+gunicorn>=20.1.0
