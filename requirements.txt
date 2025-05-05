@@ -4,6 +4,7 @@ tweepy==4.12.1
 python-dotenv==0.19.2
 pymongo==4.3.3
 langchain>=0.0.267
+langchain-openai>=0.3.16
 openai>=0.27.0
 google-generativeai>=0.3.0
 pinecone-client>=2.2.2
