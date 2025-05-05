@@ -18,18 +18,8 @@ from db import TweetDB
 from db_utils import get_db
 from tavily_domains import TAVILY_DOMAINS
 from dotenv import load_dotenv
-from variables import (
-    USER_ID,
-    FAMOUS_ACCOUNTS_STR,
-    USER_NAME,
-    USER_PERSONALITY,
-    QUESTION,
-    STYLE_RULES,
-    KNOWLEDGE_BASE,
-    CURRENT_AGENT,
-)
 from datetime import datetime, timezone
-from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics
+from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics, AgentConfig, TwitterAuth
 import random
 from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -44,12 +34,12 @@ import requests
 load_dotenv(override=True)
 
 # region Environment Configuration
-API_KEY = os.getenv("API_KEY")
+# API_KEY = os.getenv("API_KEY")
+# API_SECRET_KEY = os.getenv("API_SECRET_KEY")
+# BEARER_TOKEN = os.getenv("BEARER_TOKEN")
+# ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+# ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-API_SECRET_KEY = os.getenv("API_SECRET_KEY")
-BEARER_TOKEN = os.getenv("BEARER_TOKEN")
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -58,35 +48,73 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY")
 GROK_API_KEY = os.getenv("GROK_API_KEY")
 
+# Check for alternate OpenAI API key names
+if not API_KEY_OPENAI:
+    API_KEY_OPENAI = os.getenv("OPENAI_API_KEY")
+    if API_KEY_OPENAI:
+        print("Using OPENAI_API_KEY environment variable")
+    else:
+        print("WARNING: Neither API_KEY_OPENAI nor OPENAI_API_KEY environment variables are set")
+
+# Default agent values (will be overridden by database settings)
+USER_ID = os.getenv("DEFAULT_USER_ID", "")
+USER_NAME = os.getenv("DEFAULT_USER_NAME", "")
+USER_PERSONALITY = ""
+STYLE_RULES = ""
+CONTENT_RESTRICTIONS = ""
+STRATEGY = ""
+REMEMBER = ""
+MISSION = ""
+QUESTION = []
+ENGAGEMENT_STRATEGY = ""
+AI_AND_AGENTS = []
+WEB3_BUILDERS = []
+DEFI_EXPERTS = []
+THOUGHT_LEADERS = []
+TRADERS_AND_ANALYSTS = []
+KNOWLEDGE_BASE = ""
+FAMOUS_ACCOUNTS = []
+
 # endregion
 
 
 # Verify loaded variables
 def verify_env_vars():
     required_vars = [
-        "API_KEY",
-        "API_SECRET_KEY",
-        "BEARER_TOKEN",
-        "ACCESS_TOKEN",
-        "ACCESS_TOKEN_SECRET",
         "TAVILY_API_KEY",
         "API_KEY_OPENAI",
         "MONGODB_URI",
         "MONGODB_URL",
+    ]
+    
+    # Variables that are good to have but not strictly required
+    optional_vars = [
+        "PINECONE_API_KEY",
         "DEEPSEEK_API_KEY",
         "GROK_API_KEY",
     ]
 
-    missing_vars = []
+    missing_required = []
+    missing_optional = []
+    
     for var in required_vars:
         if not os.getenv(var):
-            missing_vars.append(var)
+            missing_required.append(var)
+    
+    for var in optional_vars:
+        if not os.getenv(var):
+            missing_optional.append(var)
 
-    if missing_vars:
-        print("❌ Missing environment variables:")
-        for var in missing_vars:
+    if missing_required:
+        print("❌ Missing required environment variables:")
+        for var in missing_required:
             print(f"  - {var}")
         return False
+    
+    if missing_optional:
+        print("⚠️ Missing optional environment variables (some features may be limited):")
+        for var in missing_optional:
+            print(f"  - {var}")
 
     print("✅ All required environment variables are set")
     return True
@@ -102,91 +130,300 @@ def get_db():
     return TweetDB()
 
 
-# endregion
+# Load agent configuration from database
+def load_agent_config(client_id: str) -> Optional[AgentConfig]:
+    """
+    Load agent configuration from the database
+    
+    Args:
+        client_id (str): The client ID
+        
+    Returns:
+        Optional[Dict[str, Any]]: The agent configuration if found, None otherwise
+    """
+    try:
+        if not client_id:
+            print("Error: client_id is required")
+            return None
+            
+        # Get the agent configuration from the database
+        db = get_db()
+        config = db.get_agent_config(client_id)
+        
+        if not config:
+            print(f"No configuration found for client_id: {client_id}")
+            return None
+        
+        # Initialize Twitter client with user credentials
+        TwitterClient.initialize(config.get("user_id"))
+        
+        # Combine the configuration into a single dictionary
+        agent_config = {
+            # Agent identity
+            "USER_ID": config.get("user_id", ""),
+            "USER_NAME": config.get("user_name", ""),
+            "USER_PERSONALITY": config.get("user_personality", ""),
+            
+            # Communication style
+            "STYLE_RULES": config.get("style_rules", ""),
+            "CONTENT_RESTRICTIONS": config.get("content_restrictions", ""),
+            
+            # Strategy
+            "STRATEGY": config.get("strategy", ""),
+            "REMEMBER": config.get("remember", ""),
+            "MISSION": config.get("mission", ""),
+            "QUESTION": config.get("questions", []),
+            
+            # Engagement strategy
+            "ENGAGEMENT_STRATEGY": config.get("engagement_strategy", ""),
+            
+            # Target accounts
+            "AI_AND_AGENTS": config.get("ai_and_agents", []),
+            "WEB3_BUILDERS": config.get("web3_builders", []),
+            "DEFI_EXPERTS": config.get("defi_experts", []),
+            "THOUGHT_LEADERS": config.get("thought_leaders", []),
+            "TRADERS_AND_ANALYSTS": config.get("traders_and_analysts", []),
+            
+            # Knowledge base
+            "KNOWLEDGE_BASE": config.get("knowledge_base", ""),
+            
+            # Model configuration
+            "MODEL_CONFIG": config.get("model_config", {}),
+            
+            # Metadata
+            "CLIENT_ID": client_id,
+            "IS_ACTIVE": config.get("is_active", True)
+        }
+        
+        return agent_config
+        
+    except Exception as e:
+        print(f"Error loading agent configuration: {e}")
+        return None
 
+# endregion
 
 # region LLM Configuration and embeddings
 def initialize_llm(model_config):
-    if model_config["type"] == "gpt":
+    """
+    Initialize the language model based on configuration.
+    
+    Args:
+        model_config (dict): Model configuration parameters
+        
+    Returns:
+        BaseChatModel: The initialized language model
+    """
+    if not API_KEY_OPENAI:
+        raise ValueError("OPENAI_API_KEY or API_KEY_OPENAI environment variable must be set")
+        
+    if not model_config:
+        print("Warning: No model config provided, using default GPT-4 configuration")
         return ChatOpenAI(
-            model="gpt-4o",
-            temperature=model_config.get("temperature", 1),
-            top_p=model_config.get("top_p", 0.005),
+            model="gpt-4",
+            temperature=0.7,
+            top_p=0.9,
             api_key=API_KEY_OPENAI,
-            presence_penalty=model_config.get("presence_penalty", 0.8),
         )
-    elif model_config["type"] == "grok":
-        return ChatOpenAI(
-            model="grok-2-latest",
-            temperature=model_config.get("temperature", 0.7),
-            top_p=model_config.get("top_p", 0.95),
-            api_key=GROK_API_KEY,
-            base_url="https://api.x.ai/v1",
-        )
-    # elif model_config["type"] == "gemini":
-    #     generation_config = {
-    #         "temperature": model_config.get("temperature", 0),
-    #         "top_p": model_config.get("top_p", 0.005),
-    #         "top_k": model_config.get("top_k", 64),
-    #         "max_output_tokens": model_config.get("max_output_tokens", 8192),
-    #         "response_mime_type": "text/plain",
-    #     }
-    #     return genai.GenerativeModel(
-    #         model_name="gemini-2.0-flash-thinking-exp-1219",
-    #         generation_config=generation_config,
-    #     )
-    elif model_config["type"] == "deepseek":
-        return ChatOpenAI(
-            model="deepseek-chat",
-            temperature=model_config.get("temperature", 0.7),
-            top_p=model_config.get("top_p", 0.95),
-            max_tokens=model_config.get("max_tokens", 4096),
-            api_key=DEEPSEEK_API_KEY,
-            base_url="https://api.deepseek.com",
-        )
-    else:
-        raise ValueError(f"Unknown model type: {model_config['type']}")
+    
+    model_type = model_config.get("type", "").lower()
+    print(model_config, "MODEL CONFIG")
+    try:
+        if model_type == "gpt-4" or model_type == "gpt-3.5-turbo" or model_type.startswith("gpt"):
+            return ChatOpenAI(
+                model=model_config.get("type", "gpt-4"),
+                temperature=model_config.get("temperature", 0.7),
+                top_p=model_config.get("top_p", 0.9),
+                presence_penalty=model_config.get("presence_penalty", 0.0),
+                frequency_penalty=model_config.get("frequency_penalty", 0.0),
+                api_key=API_KEY_OPENAI,
+            )
+        elif model_type == "gemini" or model_type == "gemini-pro":
+            # Configure Gemini integration
+            # genai.configure(api_key=GEMINI_API_KEY)
+            # return ChatGoogleGenerativeAI(
+            #     model="gemini-pro",
+            #     temperature=model_config.get("temperature", 0.7),
+            #     top_p=model_config.get("top_p", 0.95),
+            #     top_k=model_config.get("top_k", 40),
+            #     max_output_tokens=model_config.get("max_tokens", 8192),
+            # )
+            print("Warning: Gemini model requested but implementation commented out")
+            return ChatOpenAI(model="gpt-4", api_key=API_KEY_OPENAI)  # Fallback
+        elif model_type == "grok":
+            return ChatOpenAI(
+                model="gpt-4",  # Grok not directly supported yet, using GPT-4 as fallback
+                temperature=model_config.get("temperature", 0.7),
+                top_p=model_config.get("top_p", 0.95),
+                presence_penalty=model_config.get("presence_penalty", 0.0),
+                frequency_penalty=model_config.get("frequency_penalty", 0.0),
+                api_key=GROK_API_KEY,
+            )
+        elif model_type == "deepseek" or model_type == "deepseek-chat":
+            return ChatOpenAI(
+                model="deepseek-chat",
+                temperature=model_config.get("temperature", 0.7),
+                top_p=model_config.get("top_p", 0.95),
+                max_tokens=model_config.get("max_tokens", 4096),
+                api_key=DEEPSEEK_API_KEY,
+                base_url="https://api.deepseek.com",
+            )
+        else:
+            print(f"Unknown model type: {model_type}, falling back to GPT-4")
+            return ChatOpenAI(model="gpt-4", api_key=API_KEY_OPENAI)
+    except Exception as e:
+        print(f"Error initializing LLM with type {model_type}: {e}")
+        print("Falling back to default GPT-4 model")
+        return ChatOpenAI(model="gpt-4", api_key=API_KEY_OPENAI)
 
 
-# Get model configuration from current agent
-model_config = CURRENT_AGENT["MODEL_CONFIG"]
+# Default model configuration
+default_model_config = {
+    "type": "gpt-4",
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "presence_penalty": 0.6,
+    "frequency_penalty": 0.6,
+}
 
-# Initialize the selected LLM
-llm = initialize_llm(model_config)
+# Initialize with default model config - will be overridden when an agent is loaded
+try:
+    if not API_KEY_OPENAI:
+        print("WARNING: API_KEY_OPENAI environment variable is not set. LLM initialization may fail.")
+        
+    model_config = default_model_config
+    llm = initialize_llm(model_config)
+    print(f"Initialized default LLM with model type: {model_config.get('type', 'unknown')}")
+except Exception as e:
+    print(f"Error initializing default LLM: {e}")
+    # Try last resort fallback with environment variable
+    try:
+        if API_KEY_OPENAI:
+            llm = ChatOpenAI(model="gpt-4", api_key=API_KEY_OPENAI)
+            print("Initialized fallback LLM with GPT-4")
+        else:
+            print("WARNING: Cannot initialize any LLM without API_KEY_OPENAI. Some functionality may be limited.")
+            # Define a placeholder to avoid errors, but this won't actually work for API calls
+            llm = None
+    except Exception as fallback_error:
+        print(f"Critical error initializing any LLM: {fallback_error}")
+        llm = None
 
-embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
+# Initialize embeddings
+try:
+    if not API_KEY_OPENAI:
+        print("WARNING: API_KEY_OPENAI environment variable is not set. Embeddings initialization may fail.")
+        
+    embeddings = OpenAIEmbeddings(model="text-embedding-3-large", api_key=API_KEY_OPENAI)
+except Exception as e:
+    print(f"Error initializing embeddings: {e}")
+    # Fallback to older model
+    try:
+        if API_KEY_OPENAI:
+            embeddings = OpenAIEmbeddings(api_key=API_KEY_OPENAI)
+            print("Initialized fallback embeddings")
+        else:
+            print("WARNING: Cannot initialize embeddings without API_KEY_OPENAI. Vector search functionality will be limited.")
+            embeddings = None
+    except Exception as fallback_error:
+        print(f"Critical error initializing any embeddings: {fallback_error}")
+        embeddings = None
 # endregion
 
 # region Pinecone Configuration
-pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index("soulsagent")
+try:
+    if not PINECONE_API_KEY:
+        print("WARNING: PINECONE_API_KEY environment variable is not set. Vector database functionality will be limited.")
+        pc = None
+        index = None
+        docsearch = None
+        retriever = None
+    else:
+        pc = Pinecone(api_key=PINECONE_API_KEY)
+        index = pc.Index("soulsagent")
+        
+        # Initialize vector store and retriever if embeddings are available
+        if embeddings:
+            docsearch = PineconeVectorStore(
+                index=index,
+                embedding=embeddings,
+            )
+            retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
+        else:
+            print("WARNING: Embeddings not initialized. Vector search functionality will be limited.")
+            docsearch = None
+            retriever = None
+except Exception as e:
+    print(f"Error initializing Pinecone: {e}")
+    print("Vector search functionality will be limited.")
+    pc = None
+    index = None
+    docsearch = None
+    retriever = None
 # endregion
 
-# region INIT Pinecone vector db
-docsearch = PineconeVectorStore(
-    index=index,
-    embedding=embeddings,
-)
-retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-# endregion
+
+class TwitterClient:
+    """Singleton class for managing Twitter client"""
+    _instance = None
+    _client = None
+    _initialized = False
+    
+    @classmethod
+    def initialize(cls, user_id: str) -> bool:
+        """Initialize the Twitter client with user credentials"""
+        try:
+            with get_db() as db:
+                auth = db.get_twitter_auth(user_id)
+                if not auth:
+                    print(f"No Twitter authentication found for user {user_id}")
+                    return False
+                
+                cls._client = tweepy.Client(
+                    consumer_key=auth.get("api_key"),
+                    consumer_secret=auth.get("api_secret_key"),
+                    access_token=auth.get("access_token"),
+                    access_token_secret=auth.get("access_token_secret"),
+                    wait_on_rate_limit=True
+                )
+                cls._initialized = True
+                print("Twitter client initialized successfully")
+                return True
+        except Exception as e:
+            print(f"Error initializing Twitter client: {e}")
+            cls._client = None
+            cls._initialized = False
+            return False
+    
+    @classmethod
+    def get_client(cls) -> Optional[tweepy.Client]:
+        """Get the Twitter client instance"""
+        if not cls._initialized:
+            print("Twitter client not initialized. Call initialize() first.")
+            return None
+        return cls._client
+
+class BaseTweetTool:
+    """Base class for Twitter tools"""
+    def __init__(self):
+        self.api = None
+    
+    def _ensure_client(self):
+        """Ensure we have a valid client before operations"""
+        if self.api is None:
+            self.api = TwitterClient.get_client()
+        return self.api is not None
 
 
-class FollowUserTool:
+class FollowUserTool(BaseTweetTool):
     name: str = "Follow user"
     description: str = "Follow a user on X"
 
-    def __init__(self):
-        self.api = tweepy.Client(
-            bearer_token=BEARER_TOKEN,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=True,
-        )
-
     def _run(self, user_id: str) -> dict:
         try:
+            if not self._ensure_client():
+                return {"error": "Twitter client not initialized"}
+
             # Validate user_id
             if not user_id or not isinstance(user_id, str):
                 return {"error": f"Invalid user ID format: {user_id}"}
@@ -218,22 +455,15 @@ class FollowUserTool:
             return {"error": f"Error following user: {str(e)}"}
 
 
-class LikeTweetTool:
+class LikeTweetTool(BaseTweetTool):
     name: str = "Like tweet"
     description: str = "Like a tweet to show appreciation"
 
-    def __init__(self):
-        self.api = tweepy.Client(
-            bearer_token=BEARER_TOKEN,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
-        )
-
     def _run(self, tweet_id: str) -> dict:
         try:
+            if not self._ensure_client():
+                return {"error": "Twitter client not initialized"}
+
             # Validate tweet_id
             if not tweet_id or not isinstance(tweet_id, str):
                 return {"error": f"Invalid tweet ID format: {tweet_id}"}
@@ -260,22 +490,15 @@ class LikeTweetTool:
 
 
 # region Twitter Service Classes
-class PostTweetTool:
+class PostTweetTool(BaseTweetTool):
     name: str = "Post tweet"
     description: str = "Use this tool to post a new tweet or quote tweet."
 
-    def __init__(self):
-        self.api = tweepy.Client(
-            bearer_token=BEARER_TOKEN,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
-        )
-
     def _run(self, message: str, quote_tweet_id: str = None) -> dict:
         try:
+            if not self._ensure_client():
+                return {"error": "Twitter client not initialized"}
+
             # Check tweet length
             if len(message) > 280:
                 return {
@@ -332,27 +555,15 @@ class AnswerTweetInput(BaseModel):
     message: str
 
 
-class AnswerTweetTool:
+class AnswerTweetTool(BaseTweetTool):
     name: str = "Answer tweet"
     description: str = "Reply to a specific tweet"
     args_schema: Type[BaseModel] = AnswerTweetInput
 
-    def __init__(self):
-        # Initialize the Client for v2 endpoints with rate limit handling
-        self.api = tweepy.Client(
-            bearer_token=BEARER_TOKEN,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
-        )
-
     def _run(self, tweet_id: str, tweet_text: str, message: str) -> dict:
         try:
-            # Validate tweet_id
-            if not tweet_id or not isinstance(tweet_id, str):
-                return {"error": f"Invalid tweet ID format: {tweet_id}"}
+            if not self._ensure_client():
+                return {"error": "Twitter client not initialized"}
 
             # context of the tweet:
             print("tweet text", tweet_text)
@@ -394,24 +605,17 @@ class AnswerTweetTool:
             return {"error": f"Error posting reply: {str(e)}"}
 
 
-class ReadTweetsTool:
+class ReadTweetsTool(BaseTweetTool):
     name: str = "Read tweets"
     description: str = "Read X timeline for insights"
 
-    def __init__(self):
-
-        self.api = tweepy.Client(
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            bearer_token=BEARER_TOKEN,
-            wait_on_rate_limit=False,
-        )
-
     def _run(self) -> list:
         try:
-            with get_db() as db:  # Single database connection for all operations
+            if not self._ensure_client():
+                print("Failed to get Twitter client")
+                return []
+
+            with get_db() as db:
                 needs_update, current_tweets = db.check_database_status(USER_ID)
 
                 if not needs_update and current_tweets:
@@ -494,22 +698,15 @@ class ReadTweetsTool:
         return self._run()
 
 
-class TwitterSearchTool:
+class TwitterSearchTool(BaseTweetTool):
     name: str = "Search X"
     description: str = "Search for what is relevant to for mission"
 
-    def __init__(self):
-        self.api = tweepy.Client(
-            bearer_token=BEARER_TOKEN,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            wait_on_rate_limit=False,
-        )
-
     def _run(self, query: str) -> str:
         try:
+            if not self._ensure_client():
+                return "Twitter client not initialized"
+
             # Clean and format the query
             query = query.replace(" and ", " ").replace(
                 " AND ", " "
@@ -557,25 +754,15 @@ class TwitterSearchTool:
             return f"Search failed: {str(e)}"
 
 
-class ReadMentionsTool:
+class ReadMentionsTool(BaseTweetTool):
     name: str = "Read mentions"
     description: str = "Read mentions to engage with the community"
 
-    def __init__(
-        self,
-    ):
-
-        self.api = tweepy.Client(
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET,
-            bearer_token=BEARER_TOKEN,
-            wait_on_rate_limit=True,
-        )
-
     def _run(self) -> list:
         try:
+            if not self._ensure_client():
+                return []
+
             with get_db() as db:
                 needs_update, current_mentions = db.check_mentions_status(USER_ID)
 
@@ -958,6 +1145,7 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
 def read_timeline_tool() -> str:
     """Read timeline"""
     try:
+        print("READ TIMELINE TOOL RUNNING")
         tweets = read_tweets_tool._run()
         if not tweets:
             return "Timeline is empty"
@@ -1151,14 +1339,27 @@ agent_with_chat_history = RunnableWithMessageHistory(
 
 
 # Modify the run_crypto_agent function
-def run_crypto_agent(question: str, session_id: str = "default"):
+def run_crypto_agent(agent_config: AgentConfig):
     try:
+        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        client_id = agent_config.get("client_id")
+        
+        # Load config and initialize Twitter client
+        config = load_agent_config(client_id)
+        if not config:
+            return {"error": "Failed to load agent configuration"}
+            
+        # Initialize Twitter client
+        if not TwitterClient.initialize(config.get("USER_ID")):
+            return {"error": "Failed to initialize Twitter client"}
+        
+        # Now proceed with agent execution
         response = agent_with_chat_history.invoke(
-            {"input": question}, config={"configurable": {"session_id": session_id}}
+            {"input": agent_config.get("QUESTION", "Post good tweet with value based on the timeline and what is currently trending in AI businesses. ")},
+            config={"configurable": {"session_id": session_id}}
         )
 
         if "Already replied to this mention" in str(response):
-            # Try again with a new action
             return agent_with_chat_history.invoke(
                 {
                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different tweet)."
@@ -1166,7 +1367,6 @@ def run_crypto_agent(question: str, session_id: str = "default"):
                 config={"configurable": {"session_id": session_id}},
             )
 
-        # Clean up the output by only returning the 'output' field
         if isinstance(response, dict) and "output" in response:
             return response["output"]
         return response
@@ -1180,8 +1380,86 @@ def run_crypto_agent(question: str, session_id: str = "default"):
 if __name__ == "__main__":
     try:
         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        print(QUESTION, "QUESTION")
         question = random.choice(QUESTION)
         response = run_crypto_agent(question, session_id)
         print(response)
     except Exception as e:
         print(f"Error: {str(e)}")
+
+# Function to set global agent variables from config
+def set_global_agent_variables(config: Dict[str, Any]) -> None:
+    """
+    Set global agent variables from config
+    
+    Args:
+        config (Dict[str, Any]): The agent configuration
+    """
+    global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
+    global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
+    global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
+    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
+    
+    # Validate that config is not None
+    if not config:
+        print("Error: Cannot set global variables - configuration is empty")
+        return
+    
+    # Set global variables from config with fallbacks to current values
+    USER_ID = config.get("USER_ID", USER_ID)
+    USER_NAME = config.get("USER_NAME", USER_NAME)
+    USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
+    STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
+    CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
+    STRATEGY = config.get("STRATEGY", STRATEGY)
+    REMEMBER = config.get("REMEMBER", REMEMBER)
+    MISSION = config.get("MISSION", MISSION)
+    QUESTION = config.get("QUESTION", QUESTION)
+    ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
+    
+    # Ensure list values are actually lists
+    AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
+    WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
+    DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
+    THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
+    TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
+    
+    KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
+    
+
+    
+    # Update model config and reinitialize LLM if provided
+    if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
+        try:
+            new_model_config = config["MODEL_CONFIG"]
+            
+            # Only update if we have a valid type
+            if "type" in new_model_config and new_model_config["type"]:
+                model_config = new_model_config
+                # Reinitialize LLM with new config
+                llm = initialize_llm(model_config)
+                print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
+            else:
+                print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
+        except Exception as e:
+            print(f"Error reinitializing LLM: {e}")
+            print("Continuing with current LLM")
+    
+    # Combine all categories into FAMOUS_ACCOUNTS
+    try:
+        FAMOUS_ACCOUNTS = sorted(
+            list(
+                set(
+                    AI_AND_AGENTS
+                    + WEB3_BUILDERS
+                    + DEFI_EXPERTS
+                    + THOUGHT_LEADERS
+                    + TRADERS_AND_ANALYSTS
+                )
+            )
+        )
+    except Exception as e:
+        print(f"Error combining FAMOUS_ACCOUNTS: {e}")
+        # Fallback to empty list
+        FAMOUS_ACCOUNTS = []
+

@@ -1,12 +1,8 @@
 from pymongo import MongoClient
-from typing import List, Dict
+from typing import List, Dict, Optional
 from datetime import datetime, timezone, timedelta
 import os
 from dotenv import load_dotenv
-from variables import (
-    USER_ID,
-    USER_NAME,
-)
 
 from schemas import (
     ReplyToAITweet,
@@ -14,12 +10,13 @@ from schemas import (
     WrittenAITweet,
     WrittenAITweetReply,
     PublicMetrics,
+    TwitterAuth,
+    AgentConfig,
 )
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Was: MONGODB_URI = os.environ["MONGODB_URI"]
 # Get MongoDB connection strings from environment
 MONGODB_URL = os.getenv("MONGODB_URL")
 MONGODB_URI = os.getenv("MONGODB_URI")
@@ -69,6 +66,10 @@ class TweetDB:
             self.written_ai_tweets = self.db.written_ai_tweets
             self.written_ai_tweets_replies = self.db.written_ai_tweets_replies
             self.ai_mention_tweets = self.db.ai_mention_tweets
+            
+            # Add new collections for Twitter auth and agent configuration
+            self.twitter_auth = self.db.twitter_auth
+            self.agent_config = self.db.agent_config
 
             # Create index
             self.tweets.create_index("tweet_id", unique=True)
@@ -87,6 +88,11 @@ class TweetDB:
             self.written_ai_tweets_replies.create_index(
                 [("user_id", 1), ("tweet_id", 1)], unique=True
             )
+            
+            # Add indexes for new collections
+            self.twitter_auth.create_index("client_id", unique=True)
+            self.twitter_auth.create_index("user_id", unique=True)
+            self.agent_config.create_index([("client_id", 1), ("agent_name", 1)], unique=True)
 
         except Exception as e:
             print(f"[DB] Failed to connect to MongoDB: {e}")
@@ -809,3 +815,187 @@ class TweetDB:
         except Exception as e:
             print(f"Error in is_tweet_replied: {e}")
             return True  # Fail safe
+
+    # ===== Twitter Authentication Methods =====
+    
+    def add_twitter_auth(self, auth_data: TwitterAuth) -> Dict:
+        """
+        Add or update Twitter authentication information for a client
+        
+        Args:
+            auth_data (TwitterAuth): The authentication data
+            
+        Returns:
+            Dict: Result of the operation
+        """
+        try:
+            # Ensure the auth data has timestamps
+            if "created_at" not in auth_data:
+                auth_data["created_at"] = datetime.now(timezone.utc)
+            auth_data["updated_at"] = datetime.now(timezone.utc)
+            
+            # Insert or update the authentication data
+            result = self.twitter_auth.update_one(
+                {"client_id": auth_data["client_id"]},
+                {"$set": auth_data},
+                upsert=True
+            )
+            
+            return {
+                "status": "success",
+                "message": "Twitter authentication saved successfully",
+                "modified_count": result.modified_count,
+                "upserted_id": result.upserted_id
+            }
+        except Exception as e:
+            print(f"[DB] Error adding Twitter authentication: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def get_twitter_auth(self, client_id: str) -> Optional[TwitterAuth]:
+        """
+        Get Twitter authentication information for a client
+        
+        Args:
+            client_id (str): The client ID
+            
+        Returns:
+            Optional[TwitterAuth]: The authentication data if found, None otherwise
+        """
+        try:
+            auth_data = self.twitter_auth.find_one({"client_id": client_id})
+            return auth_data
+        except Exception as e:
+            print(f"[DB] Error getting Twitter authentication: {e}")
+            return None
+    
+    def delete_twitter_auth(self, client_id: str) -> Dict:
+        """
+        Delete Twitter authentication information for a client
+        
+        Args:
+            client_id (str): The client ID
+            
+        Returns:
+            Dict: Result of the operation
+        """
+        try:
+            result = self.twitter_auth.delete_one({"client_id": client_id})
+            
+            if result.deleted_count > 0:
+                return {
+                    "status": "success",
+                    "message": "Twitter authentication deleted successfully"
+                }
+            else:
+                return {
+                    "status": "warning",
+                    "message": "No Twitter authentication found for this client"
+                }
+        except Exception as e:
+            print(f"[DB] Error deleting Twitter authentication: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    # ===== Agent Configuration Methods =====
+    
+    def add_agent_config(self, config_data: AgentConfig) -> Dict:
+        """
+        Add or update agent configuration for a client
+        
+        Args:
+            config_data (AgentConfig): The agent configuration data
+            
+        Returns:
+            Dict: Result of the operation
+        """
+        try:
+            # Ensure the config data has timestamps
+            if "created_at" not in config_data:
+                config_data["created_at"] = datetime.now(timezone.utc)
+            config_data["updated_at"] = datetime.now(timezone.utc)
+            
+            # Insert or update the configuration data
+            result = self.agent_config.update_one(
+                {
+                    "client_id": config_data["client_id"],
+                    "agent_name": config_data["agent_name"]
+                },
+                {"$set": config_data},
+                upsert=True
+            )
+            
+            return {
+                "status": "success",
+                "message": "Agent configuration saved successfully",
+                "modified_count": result.modified_count,
+                "upserted_id": result.upserted_id
+            }
+        except Exception as e:
+            print(f"[DB] Error adding agent configuration: {e}")
+            return {"status": "error", "message": str(e)}
+    
+    def get_agent_config(self, client_id: str) -> Optional[AgentConfig]:
+        """
+        Get agent configuration for a client
+        
+        Args:
+            client_id (str): The client ID
+            
+        Returns:
+            Optional[AgentConfig]: The configuration data if found, None otherwise
+        """
+        try:
+            config_data = self.agent_config.find_one({
+                "client_id": client_id,
+            })
+            return config_data
+        except Exception as e:
+            print(f"[DB] Error getting agent configuration: {e}")
+            return None
+    
+    def get_all_agent_configs(self, client_id: str) -> List[AgentConfig]:
+        """
+        Get all agent configurations for a client
+        
+        Args:
+            client_id (str): The client ID
+            
+        Returns:
+            List[AgentConfig]: List of all agent configurations for the client
+        """
+        try:
+            config_data = list(self.agent_config.find({"client_id": client_id}))
+            return config_data
+        except Exception as e:
+            print(f"[DB] Error getting all agent configurations: {e}")
+            return []
+    
+    def delete_agent_config(self, client_id: str, agent_name: str) -> Dict:
+        """
+        Delete agent configuration for a client
+        
+        Args:
+            client_id (str): The client ID
+            agent_name (str): The agent name
+            
+        Returns:
+            Dict: Result of the operation
+        """
+        try:
+            result = self.agent_config.delete_one({
+                "client_id": client_id,
+                "agent_name": agent_name
+            })
+            
+            if result.deleted_count > 0:
+                return {
+                    "status": "success",
+                    "message": "Agent configuration deleted successfully"
+                }
+            else:
+                return {
+                    "status": "warning",
+                    "message": "No agent configuration found for this client and agent"
+                }
+        except Exception as e:
+            print(f"[DB] Error deleting agent configuration: {e}")
+            return {"status": "error", "message": str(e)}

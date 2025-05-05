@@ -1,96 +1,89 @@
-# Soul Agents: AI-Powered Social Agents 🐰
+# CryptoBunny API
 
-A sophisticated multi-agent system for engaging with the crypto and Web3 community on X (Twitter).
+CryptoBunny is a platform that enables users to create and manage Twitter bots powered by AI agents.
 
-Boost your social media presence.
+## Project Structure
 
-Post relevant content, engage with the community, and grow your followers.
-
-Let the AI handle the hard work.
-
-## 🌟 Features
-
-- **Multi-Agent System**: Multiple AI personalities with unique characteristics and engagement strategies
-- **Intelligent Engagement**: Uses advanced LLMs (GPT, Gemini, DeepSeek) for natural and contextual interactions
-- **Vector Database Integration**: Leverages Pinecone for efficient knowledge retrieval and context management
-- **Smart Search Capabilities**: Integrated with Tavily for real-time web research and fact verification
-- **Automated Social Features**: Handles tweets, replies, likes, and follows with personality-appropriate responses
-- **MongoDB Integration**: Robust data persistence and interaction history tracking
-- **In the roadmap**: AI enabled social trading
-## 🛠 Tech Stack
-
-- Python 3.12+
-- LangChain for LLM orchestration
-- OpenAI, Gemini, DeepSeek for LLM generation
-- Pinecone for vector storage
-- MongoDB for data persistence
-- Tweepy for X (Twitter) API integration
-- Tavily for web search capabilities
-
-## 📋 Prerequisites
-
-- Python 3.12 or higher
-- MongoDB instance
-- Pinecone account
-- X (Twitter) Developer Account with Elevated access
-- OpenAI API key
-- Tavily API key
-
-## 🚀 Setup
-
-1. Clone the repository:
-
-```bash
-git clone (https://github.com/Soul-Agents/cryptobunny.git)
-cd cryptobunny
-```
-
-2. Create and activate a virtual environment:
-
-```bash
-python -m venv myenv
-source myenv/bin/activate  # On Windows: myenv\Scripts\activate
-```
-
-3. Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-4. Set up environment variables in `.env`:
+The API has been restructured for better maintainability and separation of concerns:
 
 ```
-API_KEY=your_twitter_api_key
-API_SECRET_KEY=your_twitter_api_secret
-BEARER_TOKEN=your_twitter_bearer_token
-ACCESS_TOKEN=your_twitter_access_token
-ACCESS_TOKEN_SECRET=your_twitter_access_secret
-TAVILY_API_KEY=your_tavily_api_key
-API_KEY_OPENAI=your_openai_api_key
-MONGODB_URI=your_mongodb_uri
-MONGODB_URL=your_mongodb_url
-PINECONE_API_KEY=your_pinecone_api_key
-DEEPSEEK_API_KEY=your_deepseek_api_key
-GROK_API_KEY=your_grok_api_key
+app/
+├── __init__.py                  # Flask app initialization
+├── config/                      # Configuration management
+│   ├── __init__.py
+│   └── config.py                # Environment variables and settings
+├── models/                      # Data models
+│   ├── __init__.py
+│   ├── agent.py                 # Agent models
+│   └── twitter.py               # Twitter auth models
+├── routes/                      # API routes using blueprints
+│   ├── __init__.py
+│   ├── agent.py                 # Agent routes
+│   ├── auth.py                  # Authentication routes
+│   ├── dashboard.py             # Dashboard routes
+│   └── twitter.py               # Twitter-specific routes
+└── utils/                       # Utilities
+    ├── __init__.py
+    └── db.py                    # Database utilities
 ```
 
-5. Verify environment setup:
+## Getting Started
 
-```bash
-python main.py
-```
+### Prerequisites
 
-## 🤖 Agent Personalities
+- Python 3.8+
+- MongoDB
+- Twitter Developer Account (for API access)
 
-- Each agent maintains its unique personality while engaging with the community
+### Installation
 
-## 🔐 Security
+1. Clone the repository
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+3. Set up environment variables (see `.env.example`)
+4. Run the application:
+   ```
+   python wsgi.py
+   ```
 
-- Secure API key management through environment variables
-- Rate limiting implementation
-- Error handling for API requests
-- Safe engagement patterns
+## API Endpoints
+
+### Authentication
+
+- `GET /auth/twitter`: Initiate Twitter OAuth flow
+- `GET /auth/callback`: Handle Twitter OAuth callback
+- `GET /auth/status`: Check authentication status
+- `POST /auth/connect-twitter-account`: Start Twitter OAuth with simplified user experience
+
+### Agent Management
+
+- `POST /agent/config`: Create or update agent configuration
+- `GET /agent/config/<client_id>`: Get all agent configurations for a client
+- `GET /agent/config/<client_id>/<agent_name>`: Get a specific agent configuration
+- `PUT /agent/config/<client_id>/<agent_name>`: Update a specific agent configuration
+- `DELETE /agent/config/<client_id>/<agent_name>`: Delete a specific agent configuration
+- `GET /agent/templates`: Get all available agent templates
+- `POST /agent/run/<client_id>/<agent_name>`: Run an agent with a specific prompt or action
+- `GET /agent/history/<client_id>/<agent_name>`: Get activity history for a specific agent
+- `POST /agent/create/<client_id>`: Create a new agent with provided configuration
+- `POST /agent/test/<client_id>/<agent_name>`: Test an agent configuration
+
+### Twitter Operations
+
+- `GET /twitter/auth/<client_id>`: Get Twitter auth info for a client
+- `DELETE /twitter/auth/<client_id>`: Delete Twitter auth info
+- `POST /twitter/auth`: Save Twitter API keys
+- `POST /twitter/validate-credentials`: Validate Twitter API credentials
+- `POST /twitter/post-tweet/<client_id>`: Post a tweet on behalf of a user
+- `GET /twitter/users`: Get all Twitter users who have connected their accounts
+
+### Dashboard
+
+- `GET /dashboard/<client_id>`: Get dashboard data for a client
+- `GET /dashboard/stats/<client_id>`: Get usage statistics for a client
+- `GET /dashboard/activity/<client_id>`: Get recent activity for all agents owned by a client
 
 ---
 
