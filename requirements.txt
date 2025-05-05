@@ -1,4 +1,4 @@
-flask==2.0.1
+flask==3.1.0
 flask-cors==3.0.10
 tweepy==4.12.1
 python-dotenv==0.19.2
@@ -10,3 +10,4 @@ pinecone-client>=2.2.2
 tavily-python>=0.2.6
 uuid>=1.30
 gunicorn>=20.1.0
+Werkzeug==2.2.2
