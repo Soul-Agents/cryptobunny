@@ -1,5 +1,6 @@
 # Environment variables
 .env
+Dockerfile
 
 # Python cache files
 __pycache__/
