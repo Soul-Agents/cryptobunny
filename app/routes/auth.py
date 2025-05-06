@@ -216,8 +216,9 @@ def connect_twitter_account():
             }), 400
         
         # Safely get API keys
-        api_key = auth_data.get("api_key")
-        api_secret = auth_data.get("api_secret_key")
+        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        api_key = decrypted_auth.get("api_key")
+        api_secret = decrypted_auth.get("api_secret_key")
         
         if not api_key or not api_secret:
             return jsonify({
@@ -226,13 +227,13 @@ def connect_twitter_account():
             }), 400
         
         # Log the API key being used (first few chars only for security)
-        print(f"Using API key: {api_key[:4]}...{api_key[-4:] if len(api_key) > 8 else ''}")
+        print(f"Using API key: {api_key[:4]}...")
         print(TWITTER_CALLBACK_URL, "TWITTER CALLBACK URL")
         # Initialize OAuth1UserHandler with application credentials
         oauth1_user_handler = tweepy.OAuth1UserHandler(
             api_key,
             api_secret,
-            callback="http://localhost:8000/auth/callback"
+            callback=TWITTER_CALLBACK_URL
         )
         
         # Get the authorization URL
@@ -358,10 +359,10 @@ def twitter_callback():
             "access_token": access_token,
             "access_token_secret": access_token_secret,
             "updated_at": datetime.now(timezone.utc),
-            "temp_request_token": None,
-            "temp_request_secret": None,
-            "temp_redirect_url": None,
-            "temp_updated_at": None
+            # "temp_request_token": None,
+            # "temp_request_secret": None,
+            # "temp_redirect_url": None,
+            # "temp_updated_at": None
         }
         
         # Encrypt sensitive data before saving

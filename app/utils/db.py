@@ -219,7 +219,7 @@ class TweetDB:
         """
         return self.agent_config.find_one({"client_id": client_id})
     
-    def delete_agent_config(self, client_id: str, agent_name: str) -> Dict[str, Any]:
+    def delete_agent_config(self, client_id: str) -> Dict[str, Any]:
         """
         Delete agent configuration for a client and agent name
         
@@ -232,12 +232,11 @@ class TweetDB:
         """
         result = self.agent_config.delete_one({
             "client_id": client_id,
-            "agent_name": agent_name
         })
         
         return {
             "status": "success",
-            "message": f"Agent configuration deleted for {agent_name}",
+            "message": f"Agent configuration deleted for {client_id}",
             "deleted_count": result.deleted_count
         }
     

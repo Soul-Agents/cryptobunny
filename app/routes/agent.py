@@ -3,6 +3,8 @@ import random
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timezone
 import os
+from typing import Dict, Any, Optional, Tuple
+from dataclasses import dataclass
 
 from app.utils.db import get_db
 from app.models.agent import AgentConfig
@@ -11,138 +13,111 @@ import main  # Import main module for agent execution
 # Create Blueprint
 agent_bp = Blueprint('agent', __name__, url_prefix='/agent')
 
+# Default configuration for new agents
+DEFAULT_AGENT_CONFIG = {
+    'user_personality': '',
+    'style_rules': '',
+    'content_restrictions': '',
+    'strategy': '',
+    'remember': '',
+    'mission': '',
+    'questions': [],
+    'engagement_strategy': '',
+    'ai_and_agents': [],
+    'web3_builders': [],
+    'defi_experts': [],
+    'knowledge_base': '',
+    'model_config': {
+        'type': 'gpt-4',
+        'temperature': 0.7,
+        'top_p': 0.9,
+        'presence_penalty': 0.6,
+        'frequency_penalty': 0.6,
+    },
+    'is_active': False
+}
 
-def create_agent_config_internal(data):
+def create_or_update_agent_config(data: Dict[str, Any]) -> Tuple[Dict[str, Any], bool, str]:
     """
-    Internal function to create an agent configuration
+    Create or update an agent configuration.
+    
+    Args:
+        data: Dictionary containing agent configuration data
+        
+    Returns:
+        Tuple containing:
+        - Configuration dictionary
+        - Success boolean
+        - Message string
     """
     try:
-        # Get client_id and agent_name
-        client_id = data['client_id']
-        agent_name = data['agent_name']
-        
-        # Check if there's already a config in the database
+        client_id = data.get('client_id')
+        if not client_id:
+            return {}, False, "Missing client_id"
+
         db = get_db()
-        existing_config = db.get_agent_config(client_id, agent_name)
+        now = datetime.now(timezone.utc)
+        
+        # Check for existing config
+        existing_config = db.get_agent_config(client_id)
         
         if existing_config:
-            # Update existing configuration with new values
-            for key in data:
-                if key in existing_config and key not in ['client_id', 'agent_name', 'created_at']:
-                    existing_config[key] = data[key]
-            
-            # Update the timestamp
-            existing_config['updated_at'] = datetime.now(timezone.utc)
-            
-            # Save the updated configuration
-            result = db.add_agent_config(existing_config)
-            return existing_config
-        
-        # Get the Twitter auth data to associate with this agent
-        auth_data = db.get_twitter_auth(client_id)
-        
-        if not auth_data:
-            return {
-                "status": "error",
-                "message": f"No Twitter authentication found for client ID: {client_id}"
+            # Update existing config
+            config = {
+                **existing_config,
+                **data,
+                'created_at': existing_config['created_at'],
+                'updated_at': now
             }
-        
-        # Create a new config with default values
-        config_data = AgentConfig(
-            client_id=client_id,
-            agent_name=agent_name,
-            user_id=auth_data['user_id'],
-            user_name=auth_data['user_name'],
-            user_personality="",
-            style_rules="",
-            content_restrictions="",
-            strategy="",
-            remember="",
-            mission="",
-            questions=[],
-            engagement_strategy="",
-            ai_and_agents=[],
-            web3_builders=[],
-            defi_experts=[],
-            thought_leaders=[],
-            traders_and_analysts=[],
-            knowledge_base="",
-            model_config={
-                "type": "gpt-4",
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "presence_penalty": 0.6,
-                "frequency_penalty": 0.6,
-            },
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
-            is_active=True
-        )
-        
-        # Override with any custom data provided
-        for key in data:
-            if key in config_data and key not in ['client_id', 'agent_name', 'created_at']:
-                if data[key] is not None:  # Only override if not None
-                    config_data[key] = data[key]
-        
-        # Save the configuration
-        result = db.add_agent_config(config_data)
-        
-        # Add relevant data to result
-        config_data["result"] = result
-        
-        # Convert datetime to string for JSON serialization
-        config_data_json = json.loads(json.dumps(config_data, default=str))
-        
-        return config_data_json
-        
+        else:
+            # Create new config
+            config = {
+                **DEFAULT_AGENT_CONFIG,
+                **data,
+                'client_id': client_id,
+                'created_at': now,
+                'updated_at': now
+            }
+
+        # Save configuration
+        result = db.add_agent_config(config)
+        if not result:
+            return config, False, "Failed to save configuration to database"
+
+        return config, True, "Configuration saved successfully"
+
     except Exception as e:
-        print(f"Error creating agent configuration: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"Failed to create agent configuration: {str(e)}"
-        }
+        return {}, False, f"Internal error: {str(e)}"
 
 @agent_bp.route('/config', methods=['POST'])
 def create_agent_config():
-    """
-    Create or update an agent configuration
-    """
+    """Create or update an agent configuration"""
     try:
-        # Get request data
         data = request.json
-        
         if not data:
             return jsonify({
-                "status": "error",
-                "message": "No data provided"
+                'success': False,
+                'message': 'No data provided'
             }), 400
+
+        config, success, message = create_or_update_agent_config(data)
         
-        # Validate required fields
-        required_fields = ['client_id', 'agent_name']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({
-                    "status": "error",
-                    "message": f"Missing required field: {field}"
-                }), 400
-        
-        # Create agent configuration
-        result = create_agent_config_internal(data)
-        
-        if 'status' in result and result['status'] == 'error':
-            return jsonify(result), 400
-        
+        if not success:
+            return jsonify({
+                'success': False,
+                'message': message
+            }), 400
+
         return jsonify({
-            "status": "success",
-            "message": "Agent configuration created successfully",
-            "configuration": result
+            'success': True,
+            'message': message,
+            'configuration': json.loads(json.dumps(config, default=str))
         })
-    
+
     except Exception as e:
         return jsonify({
-            "status": "error",
-            "message": f"Failed to create agent configuration: {str(e)}"
+            'success': False,
+            'message': f'Failed to process request: {str(e)}'
         }), 500
 
 @agent_bp.route('/config/<client_id>', methods=['GET'])
@@ -153,7 +128,7 @@ def get_client_agent_config(client_id):
     try:
         db = get_db()
         config = db.get_agent_config(client_id)
-        
+        is_paid = db
         if not config:
             return jsonify({
                 "status": "error",
@@ -234,19 +209,17 @@ def delete_agent_config(client_id):
     """
     try:
         db = get_db()
-        configs = db.get_agent_config(client_id)
+        config = db.get_agent_config(client_id)
         
-        if not configs or len(configs) == 0:
+        if not config:
             return jsonify({
                 "status": "error",
                 "message": f"No agent configuration found for client ID: {client_id}"
             }), 404
         
-        # Get the first (and presumably only) configuration
-        config = configs[0]
-        agent_name = config.get("agent_name", "default")
+       
         
-        result = db.delete_agent_config(client_id, agent_name)
+        result = db.delete_agent_config(client_id)
         
         return jsonify({
             "success": True,
@@ -483,89 +456,6 @@ Remember to:
             "message": f"Failed to generate test response: {str(e)}"
         }), 500
 
-@agent_bp.route('/create/<client_id>', methods=['POST'])
-def create_agent_frontend(client_id):
-    """
-    Create a new agent with provided configuration
-    """
-    try:
-        # Get request data
-        data = request.json
-        
-        if not data:
-            return jsonify({
-                "status": "error",
-                "message": "No data provided"
-            }), 400
-        
-        # Validate required fields
-        agent_name = data.get('name')
-        
-        if not agent_name:
-            return jsonify({
-                "status": "error",
-                "message": "Agent name is required"
-            }), 400
-        
-        # Get the Twitter auth data to associate with this agent
-        db = get_db()
-        auth_data = db.get_twitter_auth(client_id)
-        
-        if not auth_data:
-            return jsonify({
-                "status": "error",
-                "message": f"No Twitter authentication found for client ID: {client_id}"
-            }), 400
-        
-        # Create agent data with default values and any provided overrides
-        agent_data = {
-            "client_id": client_id,
-            "agent_name": agent_name,
-            "user_id": auth_data['user_id'],
-            "user_name": auth_data['user_name'],
-            "user_personality": data.get("user_personality", ""),
-            "style_rules": data.get("style_rules", ""),
-            "content_restrictions": data.get("content_restrictions", ""),
-            "strategy": data.get("strategy", ""),
-            "remember": data.get("remember", ""),
-            "mission": data.get("mission", ""),
-            "questions": data.get("questions", []),
-            "engagement_strategy": data.get("engagement_strategy", ""),
-            "ai_and_agents": data.get("ai_and_agents", []),
-            "web3_builders": data.get("web3_builders", []),
-            "defi_experts": data.get("defi_experts", []),
-            "thought_leaders": data.get("thought_leaders", []),
-            "traders_and_analysts": data.get("traders_and_analysts", []),
-            "knowledge_base": data.get("knowledge_base", ""),
-            "model_config": data.get("model_config", {
-                "type": "gpt-4",
-                "temperature": 0.7,
-                "top_p": 0.9,
-                "presence_penalty": 0.6,
-                "frequency_penalty": 0.6,
-            }),
-            "created_at": datetime.now(timezone.utc),
-            "updated_at": datetime.now(timezone.utc),
-            "is_active": False
-        }
-        
-        # Save the configuration
-        result = db.add_agent_config(agent_data)
-        
-        # Convert datetime to string for JSON serialization
-        agent_data_json = json.loads(json.dumps(agent_data, default=str))
-        
-        return jsonify({
-            "status": "success",
-            "message": f"Agent '{agent_name}' created successfully",
-            "agent": agent_data_json
-        })
-    
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to create agent: {str(e)}"
-        }), 500
 
 @agent_bp.route('/update-client-id', methods=['POST'])
 def update_client_id():

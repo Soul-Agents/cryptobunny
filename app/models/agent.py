@@ -7,9 +7,8 @@ class AgentConfig:
     def __init__(
         self,
         client_id: str,
-        agent_name: str,
-        user_id: str,
-        user_name: str,
+        user_id: str = "",
+        user_name: str = "",
         user_personality: str = "",
         style_rules: str = "",
         content_restrictions: str = "",
@@ -21,8 +20,6 @@ class AgentConfig:
         ai_and_agents: List[str] = None,
         web3_builders: List[str] = None,
         defi_experts: List[str] = None,
-        thought_leaders: List[str] = None,
-        traders_and_analysts: List[str] = None,
         knowledge_base: str = "",
         model_config: Dict[str, Any] = None,
         created_at: Optional[datetime] = None,
@@ -35,7 +32,6 @@ class AgentConfig:
         payment_id: str = ""
     ):
         self.client_id = client_id
-        self.agent_name = agent_name
         self.user_id = user_id
         self.user_name = user_name
         self.user_personality = user_personality
@@ -49,8 +45,6 @@ class AgentConfig:
         self.ai_and_agents = ai_and_agents or []
         self.web3_builders = web3_builders or []
         self.defi_experts = defi_experts or []
-        self.thought_leaders = thought_leaders or []
-        self.traders_and_analysts = traders_and_analysts or []
         self.knowledge_base = knowledge_base
         self.model_config = model_config or {
             "type": "gpt-4",
@@ -72,7 +66,6 @@ class AgentConfig:
         """Convert the model to a dictionary for database storage"""
         return {
             "client_id": self.client_id,
-            "agent_name": self.agent_name,
             "user_id": self.user_id,
             "user_name": self.user_name,
             "user_personality": self.user_personality,
@@ -86,8 +79,6 @@ class AgentConfig:
             "ai_and_agents": self.ai_and_agents,
             "web3_builders": self.web3_builders,
             "defi_experts": self.defi_experts,
-            "thought_leaders": self.thought_leaders,
-            "traders_and_analysts": self.traders_and_analysts,
             "knowledge_base": self.knowledge_base,
             "model_config": self.model_config,
             "created_at": self.created_at,
@@ -105,7 +96,6 @@ class AgentConfig:
         """Create an AgentConfig instance from a dictionary"""
         return cls(
             client_id=data.get("client_id"),
-            agent_name=data.get("agent_name"),
             user_id=data.get("user_id"),
             user_name=data.get("user_name"),
             user_personality=data.get("user_personality", ""),
@@ -119,8 +109,6 @@ class AgentConfig:
             ai_and_agents=data.get("ai_and_agents", []),
             web3_builders=data.get("web3_builders", []),
             defi_experts=data.get("defi_experts", []),
-            thought_leaders=data.get("thought_leaders", []),
-            traders_and_analysts=data.get("traders_and_analysts", []),
             knowledge_base=data.get("knowledge_base", ""),
             model_config=data.get("model_config", {}),
             created_at=data.get("created_at"),
