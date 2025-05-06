@@ -5,8 +5,8 @@ python-dotenv==1.1.0
 pymongo==4.3.3
 langchain==0.3.25
 langchain-openai==0.3.16
-langchain-community==0.3.23
-langchain-pinecone==0.1.2
+langchain-community
+langchain-pinecone
 openai==1.77.0
 google-generativeai==0.3.2
 pinecone==6.0.2 
