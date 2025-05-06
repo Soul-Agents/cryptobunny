@@ -45,12 +45,6 @@ def create_app(test_config=None):
             "status": "success",
             "message": "CryptoBunny API is running",
             "version": "1.0.0",
-            "endpoints": {
-                "auth": "/auth/twitter",
-                "templates": "/agent-templates",
-                "configurations": "/agent-config/{client_id}",
-                "run_agent": "/run-agent/{client_id}/{agent_name}"
-            }
         })
     
     return app 

@@ -7,12 +7,11 @@ from langchain_openai import ChatOpenAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_pinecone import PineconeVectorStore
+# from langchain_pinecone import PineconeVectorStore
 from langchain_openai import OpenAIEmbeddings
-from pinecone import Pinecone
-
+# import pinecone
 # import google.generativeai as genai
-from langchain.tools.retriever import create_retriever_tool
+# from langchain.tools.retriever import create_retriever_tool
 import os
 from db import TweetDB
 from db_utils import get_db
@@ -28,7 +27,7 @@ from typing import List, Optional, Any, Dict
 from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain_community.chat_message_histories import ChatMessageHistory
-import requests
+
 
 # Load environment variables
 load_dotenv(override=True)
@@ -331,35 +330,35 @@ except Exception as e:
 # endregion
 
 # region Pinecone Configuration
-try:
-    if not PINECONE_API_KEY:
-        print("WARNING: PINECONE_API_KEY environment variable is not set. Vector database functionality will be limited.")
-        pc = None
-        index = None
-        docsearch = None
-        retriever = None
-    else:
-        pc = Pinecone(api_key=PINECONE_API_KEY)
-        index = pc.Index("soulsagent")
-        
-        # Initialize vector store and retriever if embeddings are available
-        if embeddings:
-            docsearch = PineconeVectorStore(
-                index=index,
-                embedding=embeddings,
-            )
-            retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
-        else:
-            print("WARNING: Embeddings not initialized. Vector search functionality will be limited.")
-            docsearch = None
-            retriever = None
-except Exception as e:
-    print(f"Error initializing Pinecone: {e}")
-    print("Vector search functionality will be limited.")
-    pc = None
-    index = None
-    docsearch = None
-    retriever = None
+# try:
+#     if not PINECONE_API_KEY:
+#         print("WARNING: PINECONE_API_KEY environment variable is not set. Vector database functionality will be limited.")
+#         pc = None
+#         index = None
+#         docsearch = None
+#         retriever = None
+#     else:
+#         # pc =  Pinecone(api_key=PINECONE_API_KEY)
+#         # index = pc.Index("soulsagent")
+#         index = "soulsagent"
+#         # Initialize vector store and retriever if embeddings are available
+#         if embeddings:
+#             docsearch = PineconeVectorStore(
+#                 index=index,
+#                 embedding=embeddings,
+#             )
+#             retriever = docsearch.as_retriever(search_type="similarity", search_kwargs={"k": 1})
+#         else:
+#             print("WARNING: Embeddings not initialized. Vector search functionality will be limited.")
+#             docsearch = None
+#             retriever = None
+# except Exception as e:
+#     print(f"Error initializing Pinecone: {e}")
+#     print("Vector search functionality will be limited.")
+#     pc = None
+#     index = None
+#     docsearch = None
+#     retriever = None
 # endregion
 
 
@@ -1232,18 +1231,18 @@ read_mentions_tool_wrapped = StructuredTool.from_function(
     description="Monitor mentions to engage with the community.",
 )
 
-retriever_tool = create_retriever_tool(
-    retriever,
-    "search_context",  # Changed name to avoid confusion
-    "Search our knowledge base for relevant context about this topic",
-)
+# retriever_tool = create_retriever_tool(
+#     retriever,
+#     "search_context",  # Changed name to avoid confusion
+#     "Search our knowledge base for relevant context about this topic",
+# )
 
 tools = [
     browse_internet,
     tweet_tool_wrapped,
     answer_tool_wrapped,
     follow_tool_wrapped,
-    retriever_tool,
+    # retriever_tool,
     twitter_search,
     like_tool_wrapped,
     read_tweets_tool_wrapped,

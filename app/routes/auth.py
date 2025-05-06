@@ -9,6 +9,7 @@ from app.utils.db import get_db
 from app.models.twitter import TwitterAuth
 from app.models.agent import AgentConfig
 from app.config.config import Config
+from app.utils.encryption import encrypt_dict_values, decrypt_dict_values
 
 # Create Blueprint
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -17,12 +18,21 @@ auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 TWITTER_CALLBACK_URL = Config.TWITTER_CALLBACK_URL
 FRONTEND_URL = Config.FRONTEND_URL
 
-
+# Define which fields should be encrypted
+SENSITIVE_FIELDS = [
+    'api_key',
+    'api_secret_key',
+    'access_token',
+    'access_token_secret',
+    'bearer_token',
+    'temp_request_token',
+    'temp_request_secret'
+]
 
 @auth_bp.route('/save-twitter-keys', methods=['POST'])
 def save_twitter_keys():
     """
-    Save Twitter API key and API secret key from the frontend
+    Save Twitter API key and API secret key from the frontend with encryption
     """
     try:
         # Extract data from request
@@ -36,7 +46,7 @@ def save_twitter_keys():
         # Extract required fields
         apiKey = data.get('apiKey')
         apiSecretKey = data.get('apiSecretKey')
-        clientId = data.get('clientId', str(uuid.uuid4()))  # Generate a new client ID if not provided
+        clientId = data.get('clientId', str(uuid.uuid4()))
         
         # Validate required fields
         if not apiKey or not apiSecretKey:
@@ -50,11 +60,12 @@ def save_twitter_keys():
         
         # Check if this client_id already exists
         existing_auth = db.twitter_auth.find_one({"client_id": clientId})
-        print(existing_auth, "EXISTING AUTH")
+        
         # Check if there are agent configurations for this client
         agent_configs = list(db.agent_config.find({"client_id": clientId}))
         has_agent_config = len(agent_configs) > 0
         
+        # Prepare auth data with encryption
         auth_data = {
             "client_id": clientId,
             "api_key": apiKey,
@@ -62,6 +73,9 @@ def save_twitter_keys():
             "has_agent_config": has_agent_config,
             "updated_at": datetime.now(timezone.utc)
         }
+        
+        # Encrypt sensitive data
+        auth_data = encrypt_dict_values(auth_data, SENSITIVE_FIELDS)
         
         if existing_auth:
             # Update existing record
@@ -76,7 +90,7 @@ def save_twitter_keys():
             result = db.twitter_auth.insert_one(auth_data)
             message = "Twitter API keys saved successfully"
         
-        # Update agent configuration to mark that Twitter keys are saved
+        # Update agent configuration
         db.agent_config.update_one(
             {"client_id": clientId},
             {"$set": {
@@ -101,7 +115,7 @@ def save_twitter_keys():
 @auth_bp.route('/credentials/<client_id>', methods=['GET'])
 def twitter_credentials(client_id):
     """
-    Get Twitter API credentials
+    Get Twitter API credentials with decryption
     
     Accepts client_id either as:
     - a path parameter (/credentials/123123)
@@ -115,7 +129,6 @@ def twitter_credentials(client_id):
         if not client_id:
             client_id = request.args.get('clientId')
     
-    print(client_id, "CLIENT ID")
     try:
         if not client_id:
             return jsonify({
@@ -127,11 +140,9 @@ def twitter_credentials(client_id):
         session['client_id'] = client_id
         
         # Get Twitter API credentials from database
-        
-
         db = get_db()
         auth_data = db.get_twitter_auth(client_id)
-        print(auth_data, "AUTH DATA")
+        
         # Check if auth_data is valid and contains API keys
         if not auth_data or not isinstance(auth_data, dict):
             return jsonify({
@@ -139,9 +150,12 @@ def twitter_credentials(client_id):
                 "message": "No Twitter authentication data found for this client ID. Please initialize with API keys first."
             }), 400
         
-        # Get API keys from auth data
-        api_key = auth_data.get("api_key")
-        api_secret = auth_data.get("api_secret_key")
+        # Decrypt the sensitive data
+        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        
+        # Get API keys from decrypted auth data
+        api_key = decrypted_auth.get("api_key")
+        api_secret = decrypted_auth.get("api_secret_key")
         
         if not api_key or not api_secret:
             return jsonify({
@@ -158,10 +172,8 @@ def twitter_credentials(client_id):
     except Exception as e:
         return jsonify({
             "status": "error",
-            "message": f"Failed to initiate Twitter authentication: {str(e)}"
+            "message": f"Failed to retrieve Twitter credentials: {str(e)}"
         }), 500
-
-
 
 @auth_bp.route('/connect-twitter-account', methods=['POST'])
 def connect_twitter_account():
@@ -268,17 +280,13 @@ def connect_twitter_account():
             "message": f"Failed to start Twitter authentication: {error_message}"
         }), 500
 
-
-
 @auth_bp.route('/callback', methods=['GET'])
 def twitter_callback():
     """
-    Handle Twitter OAuth callback
+    Handle Twitter OAuth callback with encrypted storage
     """
     try:
-        # Verify the oauth_verifier is present
         oauth_verifier = request.args.get('oauth_verifier')
-        print(oauth_verifier, "OAUTH VERIFIER")
         oauth_token = request.args.get('oauth_token')
         if not oauth_verifier:
             return jsonify({
@@ -286,32 +294,22 @@ def twitter_callback():
                 "message": "OAuth verifier is missing"
             }), 400
         
-        # Try to get client_id from session first as a fallback
         client_id = session.get('client_id')
-        print(client_id, "CLIENT ID")
         redirect_url = session.get('redirect_url', FRONTEND_URL)
         
         db = get_db()
-        
-        # Find the auth record with the matching temp_request_token
         auth_record = db.twitter_auth.find_one({"oauth_token": oauth_token})
-
-        # auth_record = db.get_twitter_auth(client_id)
-        print(auth_record, "AUTH RECORD")
-        # print(auth_record, "AUTH RECORD")
+        
         if auth_record:
-            # If found in DB, use those values
             client_id = auth_record.get("client_id")
-            request_token = auth_record.get("temp_request_token")
-            request_secret = auth_record.get("temp_request_secret")
-            redirect_url = auth_record.get("temp_redirect_url", FRONTEND_URL)
+            # Decrypt the tokens for authentication
+            decrypted_record = decrypt_dict_values(auth_record, SENSITIVE_FIELDS)
+            request_token = decrypted_record.get("temp_request_token")
+            request_secret = decrypted_record.get("temp_request_secret")
+            redirect_url = decrypted_record.get("temp_redirect_url", FRONTEND_URL)
         else:
-            # Fallback to session values
             request_token = session.get('request_token')
             request_secret = session.get('request_secret')
-        
-        print(f"Retrieved from DB/session: client_id={client_id}, token={request_token}, secret={request_secret}")
-        print(f"Received oauth_token: {oauth_token}")
         
         if not client_id or not request_token:
             return jsonify({
@@ -319,10 +317,11 @@ def twitter_callback():
                 "message": "Request token or client ID is missing. Authentication flow may have expired."
             }), 400
         
-        auth_data = db.get_twitter_auth(client_id)  
-        API_KEY = auth_data["api_key"]
-        API_SECRET = auth_data["api_secret_key"]
-        print(API_KEY, API_SECRET, "API KEY AND SECRET")
+        # Get and decrypt auth data
+        auth_data = db.get_twitter_auth(client_id)
+        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        API_KEY = decrypted_auth["api_key"]
+        API_SECRET = decrypted_auth["api_secret_key"]
         
         new_oauth1_user_handler = tweepy.OAuth1UserHandler(
             consumer_key=API_KEY,
@@ -332,13 +331,12 @@ def twitter_callback():
         new_oauth1_user_handler.request_token = {
             "oauth_token": request_token,
             "oauth_token_secret": request_secret
-            }
-
+        }
+        
         # Get the access token
         access_token, access_token_secret = new_oauth1_user_handler.get_access_token(oauth_verifier)
-        print("TOKENs", access_token, access_token_secret)
         
-        # Initialize Tweepy client with the access token
+        # Initialize Tweepy client
         client = tweepy.Client(
             consumer_key=API_KEY,
             consumer_secret=API_SECRET,
@@ -348,7 +346,7 @@ def twitter_callback():
         
         # Get the authenticated user
         user = client.get_me(user_auth=True)
-        print(f"User: {user}")
+        
         # Create the auth data object
         auth_data = {
             "client_id": client_id,
@@ -356,7 +354,7 @@ def twitter_callback():
             "username": user.data.username,
             "api_key": API_KEY,
             "api_secret_key": API_SECRET,
-            "bearer_token": "",  # Not obtained through OAuth 1.0a
+            "bearer_token": "",
             "access_token": access_token,
             "access_token_secret": access_token_secret,
             "updated_at": datetime.now(timezone.utc),
@@ -366,12 +364,13 @@ def twitter_callback():
             "temp_updated_at": None
         }
         
-  
-        print(f"Saving access and secret keys for {user.data.username}")
-        auth_data["created_at"] = datetime.now(timezone.utc)
-        result = db.add_twitter_auth(TwitterAuth(**auth_data))
+        # Encrypt sensitive data before saving
+        encrypted_auth_data = encrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        encrypted_auth_data["created_at"] = datetime.now(timezone.utc)
         
-        # Redirect to the frontend with client_id as a parameter
+        # Save to database
+        result = db.add_twitter_auth(TwitterAuth(**encrypted_auth_data))
+        
         frontend_redirect = f"{redirect_url}/app/payment?client_id={client_id}&auth=success&username={user.data.username}"
         return redirect(frontend_redirect)
     
@@ -381,24 +380,35 @@ def twitter_callback():
         error_redirect = f"{FRONTEND_URL}?auth=error&message={error_message}"
         return redirect(error_redirect)
 
-
 @auth_bp.route('/users', methods=['GET'])
 def users():
     """
-    Get all users
+    Get all users with sensitive data removed
     """
     db = get_db()   
     users = db.twitter_auth.find()
     users_list = list(users)
-    print(users_list, "USERS LIST")
-    users_list_json = json.loads(json.dumps(users_list, default=str))
+    
+    # Filter out sensitive data
+    safe_users = []
+    for user in users_list:
+        safe_user = {
+            "client_id": user.get("client_id"),
+            "username": user.get("username"),
+            "user_id": user.get("user_id"),
+            "created_at": user.get("created_at"),
+            "updated_at": user.get("updated_at"),
+            "has_agent_config": user.get("has_agent_config", False)
+        }
+        safe_users.append(safe_user)
+    
+    users_list_json = json.loads(json.dumps(safe_users, default=str))
     return jsonify({
         "status": "success",
         "message": "Users retrieved successfully",
         "users": users_list_json
     }), 200
     
-
 @auth_bp.route('/status/<client_id>', methods=['GET'])
 def auth_status(client_id=None):
     """
@@ -449,8 +459,6 @@ def auth_status(client_id=None):
         "authenticated": True,
         "auth_data": safe_auth_data_json
     })
-
-
 
     """
     Check the status of a Twitter OAuth callback
