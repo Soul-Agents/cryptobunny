@@ -203,7 +203,7 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
 # endregion
 
 # region LLM Configuration and embeddings
-def initialize_llm(model_config):
+def initialize_llm(model_config=None):
     """
     Initialize the language model based on configuration.
     
@@ -1354,7 +1354,7 @@ def run_crypto_agent(agent_config: AgentConfig):
         
         # Now proceed with agent execution
         response = agent_with_chat_history.invoke(
-            {"input": agent_config.get("QUESTION", "Post good tweet with value based on the timeline and what is currently trending in AI businesses. ")},
+            {"input": agent_config.get("QUESTION", "Post good tweet with value based on the timeline and what is currently trending in AI businesses.")},
             config={"configurable": {"session_id": session_id}}
         )
 

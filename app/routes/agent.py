@@ -365,7 +365,7 @@ def get_client_agent_history(client_id):
 @agent_bp.route('/test/<client_id>', methods=['POST'])
 def test_client_agent_config(client_id):
     """
-    Test a client's agent configuration by generating a simple LLM response
+    Test an agent configuration by generating a simple LLM response.
     """
     try:
         # Get the request data
@@ -377,39 +377,30 @@ def test_client_agent_config(client_id):
                 "message": "No data provided"
             }), 400
         
-        # Get the test question from request data
+        # Get the test question and configuration from request data
         test_question = data.get('question')
+        agent_config = data.get('config')
         
         if not test_question:
             return jsonify({
                 "status": "error",
                 "message": "Test question is required"
             }), 400
-        
-        # Get the client's agent configuration
-        db = get_db()
-        configs = db.get_agent_config(client_id)
-        
-        if not configs or len(configs) == 0:
+            
+        if not agent_config:
             return jsonify({
                 "status": "error",
-                "message": f"No agent configuration found for client ID: {client_id}"
-            }), 404
+                "message": "Agent configuration is required"
+            }), 400
         
-        # Get the first (and presumably only) configuration
-        agent_config = configs[0]
-        agent_name = agent_config.get("agent_name", "default")
-        
-        # Get model configuration
-        model_config = agent_config.get("model_config", {})
-        model_type = model_config.get("type", "gpt-4")
       
-        llm = main.initialize_llm(model_config={"type": "deepseek"})
+      
+        llm = main.initialize_llm()
         
         # Create a simple prompt that includes the agent's personality and configuration
-        personality = agent_config.get("user_personality", "")
-        style_rules = agent_config.get("style_rules", "")
-        content_restrictions = agent_config.get("content_restrictions", "")
+        personality = agent_config.get("personality", "")
+        style_rules = agent_config.get("styleRules", "")
+        content_restrictions = agent_config.get("contentRestrictions", "")
         
         prompt = f"""You are a Twitter bot with the following personality and rules:
 
@@ -422,7 +413,7 @@ Style Rules:
 Content Restrictions:
 {content_restrictions}
 
-Please respond to this question in character, as if you were this Twitter bot:
+Please respond to this question in character:
 {test_question}
 
 Remember to:
@@ -436,23 +427,16 @@ Remember to:
         response = llm.invoke(prompt)
         
         return jsonify({
-            "status": "success",
+            "success": True,
             "message": "Test response generated successfully",
             "result": response.content,
             "question": test_question,
-            "agent_config": {
-                "name": agent_name,
-                "personality": personality,
-                "style_rules": style_rules,
-                "content_restrictions": content_restrictions,
-                "model": model_type,
-                "model_config": model_config
-            }
+          
         })
     
     except Exception as e:
         return jsonify({
-            "status": "error",
+            "success": False,
             "message": f"Failed to generate test response: {str(e)}"
         }), 500
 
