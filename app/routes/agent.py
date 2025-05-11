@@ -734,20 +734,20 @@ def run_agents():
     """
     try:
         # Security check - validate API key
-        # api_key = request.headers.get('X-API-KEY')
-        # required_api_key = os.getenv("AGENT_RUNNER_API_KEY")
+        api_key = request.headers.get('X-API-KEY')
+        required_api_key = os.getenv("AGENT_RUNNER_API_KEY")
         
-        # if not required_api_key:
-        #     return jsonify({
-        #         "status": "error",
-        #         "message": "Server configuration error: AGENT_RUNNER_API_KEY not set"
-        #     }), 500
+        if not required_api_key:
+            return jsonify({
+                "status": "error",
+                "message": "Server configuration error: AGENT_RUNNER_API_KEY not set"
+            }), 500
             
-        # if not api_key or api_key != required_api_key:
-        #     return jsonify({
-        #         "status": "error",
-        #         "message": "Unauthorized: Invalid or missing API key"
-        #     }), 401
+        if not api_key or api_key != required_api_key:
+            return jsonify({
+                "status": "error",
+                "message": "Unauthorized: Invalid or missing API key"
+            }), 401
         
         import threading
         # Get the database connection
