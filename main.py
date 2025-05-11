@@ -1354,7 +1354,21 @@ def run_crypto_agent(agent_config: AgentConfig):
         
         # Now proceed with agent execution
         response = agent_with_chat_history.invoke(
-            {"input": agent_config.get("QUESTION", "Post good tweet with value based on the timeline and what is currently trending in AI businesses.")},
+            {"input": agent_config.get("QUESTION",  """
+        SINGLE ACTION:
+        1. Read timeline for relevant posts
+        2. If found → Answer ONCE and STOP IMMEDIATELY
+        3. If not found → STOP IMMEDIATELY
+        4. If already replied → STOP IMMEDIATELY
+
+        DO NOT:
+        - Continue reading timeline after answering
+        - Reply to multiple tweets
+        - Reply to own tweets
+
+        END PROTOCOL:
+        → STOP
+        """,)},
             config={"configurable": {"session_id": session_id}}
         )
 
