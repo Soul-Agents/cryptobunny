@@ -535,6 +535,7 @@ def cleanup_twitter_auth(client_id):
         }), 500
 
 @agent_bp.route('/payment/<client_id>', methods=['POST'])
+@require_auth
 def process_agent_payment(client_id):
     """
     Process payment for a client's agent and mark it as paid
@@ -598,6 +599,7 @@ def process_agent_payment(client_id):
             }}
         )
         
+        
         if update_result.modified_count == 0:
             return jsonify({
                 "status": "error",
@@ -610,6 +612,8 @@ def process_agent_payment(client_id):
         # Convert datetime to string for JSON serialization
         updated_config_json = json.loads(json.dumps(updated_config, default=str))
         
+        main.run_crypto_agent(update_agent_config)
+
         return jsonify({
             "success": True,
             # "message": "Agent payment processed successfully",
@@ -791,5 +795,4 @@ def run_agents():
             "message": f"Failed to run agents: {str(e)}"
         }), 500
 
-    
-    
+

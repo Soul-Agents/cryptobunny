@@ -1355,12 +1355,38 @@ agent_with_chat_history = RunnableWithMessageHistory(
 )
 
 # 9. Update the run function to use the RunnableWithMessageHistory directly
-def run_crypto_agent(question: str):
+def run_crypto_agent(agent_config: AgentConfig):
     """Runs the agent with persistent history for the defined SESSION_ID."""
     try:
         # Configuration includes the session_id for history retrieval
         config = {"configurable": {"session_id": SESSION_ID}}
+        question = """
+         SINGLE ACTION:
+         1. Read timeline for relevant posts
+         2. If found → Answer ONCE and STOP IMMEDIATELY
+         3. If not found → STOP IMMEDIATELY
+         4. If already replied → STOP IMMEDIATELY
+
+         DO NOT:
+         - Continue reading timeline after answering
+         - Reply to multiple tweets
+         - Reply to own tweets
+
+         END PROTOCOL:
+         → STOP
+         """
+        # session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        client_id = agent_config.get("client_id")
         
+        # Load config and initialize Twitter client
+        config = load_agent_config(client_id)
+        if not config:
+            return {"error": "Failed to load agent configuration"}
+            
+        # Initialize Twitter client
+        if not TwitterClient.initialize(config.get("USER_ID")):
+            return {"error": "Failed to initialize Twitter client"}
+
         # Invoke the agent wrapped with history management
         result = agent_with_chat_history.invoke(
             {"input": question},
