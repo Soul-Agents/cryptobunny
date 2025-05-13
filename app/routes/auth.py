@@ -10,6 +10,7 @@ from app.models.twitter import TwitterAuth
 from app.models.agent import AgentConfig
 from app.config.config import Config
 from app.utils.encryption import encrypt_dict_values, decrypt_dict_values
+from app.utils.protect import require_auth
 # from jwt import jwt
 # Create Blueprint
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -115,68 +116,68 @@ def save_twitter_keys():
             "message": f"Failed to save Twitter API keys: {str(e)}"
         }), 500
 
-@auth_bp.route('/credentials/<client_id>', methods=['GET'])
-def twitter_credentials(client_id):
-    """
-    Get Twitter API credentials with decryption
+# @auth_bp.route('/credentials/<client_id>', methods=['GET'])
+# def twitter_credentials(client_id):
+#     """
+#     Get Twitter API credentials with decryption
     
-    Accepts client_id either as:
-    - a path parameter (/credentials/123123)
-    - a query parameter (/credentials?client_id=123123)
-    - a query parameter with camelCase (/credentials?clientId=123123)
-    """
-    # If client_id was not provided as a path parameter, try to get it from query parameters
-    if not client_id:
-        client_id = request.args.get('client_id')
-        # Also check for camelCase clientId
-        if not client_id:
-            client_id = request.args.get('clientId')
+#     Accepts client_id either as:
+#     - a path parameter (/credentials/123123)
+#     - a query parameter (/credentials?client_id=123123)
+#     - a query parameter with camelCase (/credentials?clientId=123123)
+#     """
+#     # If client_id was not provided as a path parameter, try to get it from query parameters
+#     if not client_id:
+#         client_id = request.args.get('client_id')
+#         # Also check for camelCase clientId
+#         if not client_id:
+#             client_id = request.args.get('clientId')
     
-    try:
-        if not client_id:
-            return jsonify({
-                "status": "error",
-                "message": "No client ID provided"
-            }), 400
+#     try:
+#         if not client_id:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "No client ID provided"
+#             }), 400
         
-        # Store the client ID in the session
-        session['client_id'] = client_id
+#         # Store the client ID in the session
+#         session['client_id'] = client_id
         
-        # Get Twitter API credentials from database
-        db = get_db()
-        auth_data = db.get_twitter_auth(client_id)
+#         # Get Twitter API credentials from database
+#         db = get_db()
+#         auth_data = db.get_twitter_auth(client_id)
         
-        # Check if auth_data is valid and contains API keys
-        if not auth_data or not isinstance(auth_data, dict):
-            return jsonify({
-                "status": "error",
-                "message": "No Twitter authentication data found for this client ID. Please initialize with API keys first."
-            }), 400
+#         # Check if auth_data is valid and contains API keys
+#         if not auth_data or not isinstance(auth_data, dict):
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "No Twitter authentication data found for this client ID. Please initialize with API keys first."
+#             }), 400
         
-        # Decrypt the sensitive data
-        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+#         # Decrypt the sensitive data
+#         decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
         
-        # Get API keys from decrypted auth data
-        api_key = decrypted_auth.get("api_key")
-        api_secret = decrypted_auth.get("api_secret_key")
+#         # Get API keys from decrypted auth data
+#         api_key = decrypted_auth.get("api_key")
+#         api_secret = decrypted_auth.get("api_secret_key")
         
-        if not api_key or not api_secret:
-            return jsonify({
-                "status": "error",
-                "message": "Twitter API keys are missing from authentication data"
-            }), 400
+#         if not api_key or not api_secret:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "Twitter API keys are missing from authentication data"
+#             }), 400
         
-        return jsonify({
-            "status": "success",
-            "api_key": api_key,
-            "api_secret": api_secret    
-        })
+#         return jsonify({
+#             "status": "success",
+#             "api_key": api_key,
+#             "api_secret": api_secret    
+#         })
     
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to retrieve Twitter credentials: {str(e)}"
-        }), 500
+#     except Exception as e:
+#         return jsonify({
+#             "status": "error",
+#             "message": f"Failed to retrieve Twitter credentials: {str(e)}"
+#         }), 500
 
 @auth_bp.route('/connect-twitter-account', methods=['POST'])
 def connect_twitter_account():
@@ -385,6 +386,7 @@ def twitter_callback():
         return redirect(error_redirect)
 
 @auth_bp.route('/users', methods=['GET'])
+@require_auth
 def users():
     """
     Get all users with sensitive data removed
@@ -414,6 +416,7 @@ def users():
     }), 200
     
 @auth_bp.route('/status/<client_id>', methods=['GET'])
+@require_auth
 def auth_status(client_id=None):
     """
     Check authentication status for a client
@@ -463,64 +466,3 @@ def auth_status(client_id=None):
         "authenticated": True,
         "auth_data": safe_auth_data_json
     })
-
-    """
-    Check the status of a Twitter OAuth callback
-    This endpoint can be used by the frontend to check if the user has completed the OAuth flow
-    
-    Accepts client_id either as:
-    - a path parameter (/twitter-callback-status/123123)
-    - a query parameter (/twitter-callback-status?client_id=123123)
-    - a query parameter with camelCase (/twitter-callback-status?clientId=123123)
-    """
-    try:
-        # If client_id was not provided as a path parameter, try to get it from query parameters
-        if not client_id:
-            client_id = request.args.get('client_id')
-            # Also check for camelCase clientId
-            if not client_id:
-                client_id = request.args.get('clientId')
-        
-        if not client_id:
-            return jsonify({
-                "status": "error",
-                "message": "No client ID provided"
-            }), 400
-        
-        db = get_db()
-        auth_data = db.get_twitter_auth(client_id)
-        
-        if not auth_data or not isinstance(auth_data, dict):
-            return jsonify({
-                "status": "pending",
-                "message": "Authentication not completed yet"
-            }), 200
-        
-        # Check if required user data is available
-        if not auth_data.get("user_id") or not auth_data.get("user_name"):
-            return jsonify({
-                "status": "pending",
-                "message": "Authentication data incomplete"
-            }), 200
-        
-        # Return minimal user data
-        user_data = {
-            "user_id": auth_data.get("user_id"),
-            "user_name": auth_data.get("user_name"),
-            "created_at": auth_data.get("created_at", datetime.now(timezone.utc))
-        }
-        
-        # Convert dates to string for JSON serialization
-        user_data_json = json.loads(json.dumps(user_data, default=str))
-        
-        return jsonify({
-            "status": "completed",
-            "message": "Authentication completed successfully",
-            "user_data": user_data_json
-        }), 200
-    
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to check Twitter callback status: {str(e)}"
-        }), 500 
