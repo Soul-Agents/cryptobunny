@@ -24,9 +24,9 @@ from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
-from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain.memory import  MongoDBChatMessageHistory
+from pymongo import MongoClient
 
 
 # Load environment variables
