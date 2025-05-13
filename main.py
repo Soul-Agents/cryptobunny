@@ -27,7 +27,7 @@ from typing import List, Optional, Any, Dict
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.memory import  MongoDBChatMessageHistory
 from pymongo import MongoClient
-
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Load environment variables
 load_dotenv(override=True)
