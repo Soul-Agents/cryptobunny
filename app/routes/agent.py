@@ -5,13 +5,16 @@ from datetime import datetime, timezone
 import os
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
+from functools import wraps
 
 from app.utils.db import get_db
 from app.models.agent import AgentConfig
 import main  # Import main module for agent execution
-
+import jwt
+from app.utils.protect import require_auth
 # Create Blueprint
 agent_bp = Blueprint('agent', __name__, url_prefix='/agent')
+
 
 # Default configuration for new agents
 DEFAULT_AGENT_CONFIG = {
@@ -121,6 +124,7 @@ def create_agent_config():
         }), 500
 
 @agent_bp.route('/config/<client_id>', methods=['GET'])
+@require_auth
 def get_client_agent_config(client_id):
     """
     Get a client's agent configuration (one user = one agent)
@@ -152,6 +156,7 @@ def get_client_agent_config(client_id):
         }), 500
 
 @agent_bp.route('/config/<client_id>', methods=['PUT'])
+@require_auth
 def update_agent_config(client_id):
     """
     Update a client's agent configuration
@@ -203,6 +208,7 @@ def update_agent_config(client_id):
         }), 500
 
 @agent_bp.route('/config/<client_id>', methods=['DELETE'])
+@require_auth
 def delete_agent_config(client_id):
     """
     Delete a client's agent configuration
@@ -234,6 +240,7 @@ def delete_agent_config(client_id):
 
 
 @agent_bp.route('/run/<client_id>', methods=['POST'])
+@require_auth
 def run_client_agent(client_id):
     """
     Run a client's agent with a specific prompt or action
@@ -320,6 +327,7 @@ def run_client_agent(client_id):
         }), 500
 
 @agent_bp.route('/history/<client_id>', methods=['GET'])
+@require_auth
 def get_client_agent_history(client_id):
     """
     Get activity history for a client's agent
@@ -368,6 +376,8 @@ def test_client_agent_config(client_id):
     Test an agent configuration by generating a simple LLM response.
     """
     try:
+
+      
         # Get the request data
         data = request.json
         
@@ -381,6 +391,8 @@ def test_client_agent_config(client_id):
         test_question = data.get('question')
         agent_config = data.get('config')
         
+
+
         if not test_question:
             return jsonify({
                 "status": "error",
@@ -431,7 +443,7 @@ Remember to:
             "message": "Test response generated successfully",
             "result": response.content,
             "question": test_question,
-          
+           
         })
     
     except Exception as e:
@@ -441,39 +453,6 @@ Remember to:
         }), 500
 
 
-@agent_bp.route('/update-client-id', methods=['POST'])
-def update_client_id():
-    """
-  
-    """
-    try:
-        # Get database connection
-        db = get_db()
-        
-        # Update agent configuration
-        agent_result = db.agent_config.update_many(
-            {"client_id": "sebastian_oldak"},
-            {"$set": {"client_id": "did:privy:cm8f5qkmb007dodzrtecvnyri", "updated_at": datetime.now(timezone.utc)}}
-        )
-        
-        # Update Twitter authentication
-        twitter_result = db.twitter_auth.update_many(
-            {"client_id": "sebastian_oldak"},
-            {"$set": {"client_id": "did:privy:cm8f5qkmb007dodzrtecvnyri", "updated_at": datetime.now(timezone.utc)}}
-        )
-        
-        return jsonify({
-            "status": "success",
-            "message": "Client ID updated from 'sebastian_oldak' to 'did:privy:cm8f5qkmb007dodzrtecvnyri'",
-            "agent_configs_updated": agent_result.modified_count,
-            "twitter_auths_updated": twitter_result.modified_count
-        })
-    
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": f"Failed to update client ID: {str(e)}"
-        }), 500
 
 @agent_bp.route('/reset-twitter-keys/<client_id>', methods=['PUT'])
 def reset_twitter_keys(client_id):
@@ -556,6 +535,7 @@ def cleanup_twitter_auth(client_id):
         }), 500
 
 @agent_bp.route('/payment/<client_id>', methods=['POST'])
+@require_auth
 def process_agent_payment(client_id):
     """
     Process payment for a client's agent and mark it as paid
@@ -619,6 +599,7 @@ def process_agent_payment(client_id):
             }}
         )
         
+        
         if update_result.modified_count == 0:
             return jsonify({
                 "status": "error",
@@ -631,6 +612,8 @@ def process_agent_payment(client_id):
         # Convert datetime to string for JSON serialization
         updated_config_json = json.loads(json.dumps(updated_config, default=str))
         
+        main.run_crypto_agent(update_agent_config)
+
         return jsonify({
             "success": True,
             # "message": "Agent payment processed successfully",
@@ -650,6 +633,7 @@ def process_agent_payment(client_id):
         }), 500
 
 @agent_bp.route('/payment/<client_id>', methods=['GET'])
+@require_auth
 def get_agent_payment_status(client_id):
     """
     Get the payment status for a client's agent
@@ -693,6 +677,7 @@ def get_agent_payment_status(client_id):
         }), 500
 
 @agent_bp.route('/payment/status/<client_id>', methods=['GET'])
+@require_auth
 def check_agent_payment_status(client_id):
     """
     Quick check if a client has a paid and active agent
@@ -810,5 +795,4 @@ def run_agents():
             "message": f"Failed to run agents: {str(e)}"
         }), 500
 
-    
-    
+

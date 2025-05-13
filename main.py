@@ -24,20 +24,17 @@ from openai import OpenAI
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
-from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
+from pymongo import MongoClient
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.chat_message_histories import MongoDBChatMessageHistory
 
 
 # Load environment variables
 load_dotenv(override=True)
 
 # region Environment Configuration
-# API_KEY = os.getenv("API_KEY")
-# API_SECRET_KEY = os.getenv("API_SECRET_KEY")
-# BEARER_TOKEN = os.getenv("BEARER_TOKEN")
-# ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-# ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
+
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
@@ -1250,97 +1247,135 @@ tools = [
 ]
 # endregion
 
-# region Agent Configuration
+# 1. Define constants
+MEMORY_KEY = "chat_history"
+SESSION_ID = "crypto-agent-permanent-session"
 current_date = datetime.now().strftime("%B %Y")
 
+# 2. Define function to get session history (using the persistent MongoDB store)
+def get_session_history(session_id: str) -> MongoDBChatMessageHistory:
+    """Returns the chat history for a given session ID."""
+    return MongoDBChatMessageHistory(
+        session_id=session_id,
+        connection_string=MONGODB_URL,
+        database_name="agent_memory",
+        collection_name="chat_histories"
+    )
 
+# 3. MongoDB Connection & Index Setup (Keep this part)
+def test_mongodb_connection():
+    try:
+        # Test inserting/reading directly to ensure basic connectivity
+        client = MongoClient(MONGODB_URL)
+        db = client.agent_memory
+        test_doc = {"_id": "connection_test", "session_id": SESSION_ID, "test": True}
+        db.connection_tests.replace_one({"_id": "connection_test"}, test_doc, upsert=True)
+        read_doc = db.connection_tests.find_one({"_id": "connection_test"})
+        if read_doc and read_doc["test"]:
+             print("MongoDB connection test successful.")
+             db.connection_tests.delete_one({"_id": "connection_test"}) # Clean up test doc
+             return True
+        else:
+             print(f"MongoDB read test failed. Read doc: {read_doc}")
+             return False
+    except Exception as e:
+        print(f"MongoDB connection test failed: {e}")
+        return False
+
+def setup_mongodb_indexes():
+    try:
+        client = MongoClient(MONGODB_URL)
+        db = client.agent_memory
+        # Only need chat_histories index now
+        # db.parent_runs.create_index([("session_id", 1)], unique=True) # Remove this
+        # db.runs.create_index([("session_id", 1), ("timestamp", -1)]) # Remove this
+        db.chat_histories.create_index([("session_id", 1), ("timestamp", -1)]) # Keep this for querying history
+        # Optional TTL index for chat_histories
+        try: # Use try-except as creating TTL index might fail if it exists with different options
+             db.chat_histories.create_index("timestamp", expireAfterSeconds=30 * 24 * 60 * 60)
+             print("MongoDB TTL index on chat_histories created/verified.")
+        except Exception as ttl_e:
+             print(f"Note: Could not create TTL index (may already exist): {ttl_e}")
+        print("MongoDB indexes setup complete.")
+    except Exception as e:
+        print(f"Error creating MongoDB indexes: {e}")
+
+# 4. Run setup tests
+if not test_mongodb_connection():
+    raise Exception("MongoDB connection failed - please check connection string and permissions")
+
+setup_mongodb_indexes()
+# Optional: verify history creation works, but less critical now
+# try:
+#    test_hist = get_session_history("test_verify_session")
+#    test_hist.add_user_message("Verify message")
+#    print(f"History verification successful. Messages: {len(test_hist.messages)}")
+# except Exception as e:
+#    print(f"History verification failed: {e}")
+#    raise Exception("MongoDB history object creation failed.")
+
+# 5. Create Prompt Template (Ensure MEMORY_KEY matches)
 prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
             f"""
-            You are {USER_NAME}.
-            Core Identity: {USER_PERSONALITY}
+            You are {USER_NAME},
+            remember your personality: {USER_PERSONALITY}.
             Timestamp: {current_date}
-
-            ABSOLUTE RESTRICTIONS:
-            - Never interact with {USER_ID}
-            - Never interact with {USER_NAME}
-            - Never interact with your retweets
-            Exception: Only reply to @{USER_NAME} mentions if tagged
-
             {STYLE_RULES}
-
-            SINGLE ACTION PROTOCOL:
-            1. OBSERVE (ONE only):
-            → read_timeline
-            → read_mentions (avoid)
-                
-            2. EXECUTE ONE ACTION AND STOP:
-            → tweet_tool_wrapped
-            OR
-            → answer_tool_wrapped
-            STOP
-            
-            3. END PROTOCOL:
-            → END aka STOP
-
-            DISABLED ACTIONS (DO NOT USE):
-            → like
-            → follow
-            → search_context
-            → browse_internet
-            → search_twitter
-            
-            Use KNOWLEDGE_BASE for context: {KNOWLEDGE_BASE}
-
-            CRITICAL: Execute ONE action only. Then TERMINATE immediately.
-            No additional responses. No suggestions. No continuations.
-            """,
+            Use the provided chat history to maintain context.
+            """, # Simplified prompt example
         ),
-        ("placeholder", "{chat_history}"),
+        MessagesPlaceholder(variable_name=MEMORY_KEY), # Use the constant
         ("human", "{input}"),
-        ("placeholder", "{agent_scratchpad}"),
+        MessagesPlaceholder(variable_name="agent_scratchpad"),
     ]
 )
 
+# 6. Create the Agent
+# Ensure 'llm' is defined somewhere above this line
+# llm = ChatOpenAI(...) # Example llm definition
 agent = create_tool_calling_agent(llm, tools, prompt)
 
-
-# region Memory Configuration
-def get_memory(session_id: str = "default") -> ChatMessageHistory:
-    """Initialize or retrieve chat memory for the given session"""
-    return ChatMessageHistory(session_id=session_id)
-
-
-# Create memory instance
-memory = ConversationBufferMemory(
-    memory_key="chat_history", return_messages=True, output_key="output"
-)
-
-# Modify the agent executor creation (replace existing agent_executor definition)
+# 7. Create the AgentExecutor (WITHOUT the memory argument)
 agent_executor = AgentExecutor(
     agent=agent,
     tools=tools,
-    verbose=True,
-    handle_parsing_errors=True,
-    max_iterations=10,
-    memory=memory,  # Add memory here
+    verbose=True, # Keep verbose for debugging for now
+    handle_parsing_errors=True # Good practice
 )
 
-# Wrap the agent executor with message history
+# 8. Create the RunnableWithMessageHistory
 agent_with_chat_history = RunnableWithMessageHistory(
     agent_executor,
-    get_memory,
-    input_messages_key="input",
-    history_messages_key="chat_history",
+    get_session_history, # Function to retrieve history based on session_id
+    input_messages_key="input", # Key for the user's input
+    history_messages_key=MEMORY_KEY, # Key for the chat history in the prompt
 )
 
-
-# Modify the run_crypto_agent function
+# 9. Update the run function to use the RunnableWithMessageHistory directly
 def run_crypto_agent(agent_config: AgentConfig):
+    """Runs the agent with persistent history for the defined SESSION_ID."""
     try:
-        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        # Configuration includes the session_id for history retrieval
+        config = {"configurable": {"session_id": SESSION_ID}}
+        question = """
+         SINGLE ACTION:
+         1. Read timeline for relevant posts
+         2. If found → Answer ONCE and STOP IMMEDIATELY
+         3. If not found → STOP IMMEDIATELY
+         4. If already replied → STOP IMMEDIATELY
+
+         DO NOT:
+         - Continue reading timeline after answering
+         - Reply to multiple tweets
+         - Reply to own tweets
+
+         END PROTOCOL:
+         → STOP
+         """
+        # session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         client_id = agent_config.get("client_id")
         
         # Load config and initialize Twitter client
@@ -1351,128 +1386,270 @@ def run_crypto_agent(agent_config: AgentConfig):
         # Initialize Twitter client
         if not TwitterClient.initialize(config.get("USER_ID")):
             return {"error": "Failed to initialize Twitter client"}
-        
-        # Now proceed with agent execution
-        response = agent_with_chat_history.invoke(
-            {"input": agent_config.get("QUESTION",  """
-        SINGLE ACTION:
-        1. Read timeline for relevant posts
-        2. If found → Answer ONCE and STOP IMMEDIATELY
-        3. If not found → STOP IMMEDIATELY
-        4. If already replied → STOP IMMEDIATELY
 
-        DO NOT:
-        - Continue reading timeline after answering
-        - Reply to multiple tweets
-        - Reply to own tweets
-
-        END PROTOCOL:
-        → STOP
-        """,)},
-            config={"configurable": {"session_id": session_id}}
+        # Invoke the agent wrapped with history management
+        result = agent_with_chat_history.invoke(
+            {"input": question},
+            config=config
         )
-
-        if "Already replied to this mention" in str(response):
-            return agent_with_chat_history.invoke(
-                {
-                    "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different tweet)."
-                },
-                config={"configurable": {"session_id": session_id}},
-            )
-
-        if isinstance(response, dict) and "output" in response:
-            return response["output"]
-        return response
-
+        
+        # The output is typically in result['output']
+        return result.get("output", "Agent did not return an output.")
+        
     except Exception as e:
         print(f"Error in agent execution: {str(e)}")
+        import traceback
+        print(traceback.format_exc()) # Print full traceback for debugging
         return {"error": str(e)}
 
-
-# Modify the main execution block
+# 10. Main execution block (remains the same)
 if __name__ == "__main__":
     try:
-        session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        print(QUESTION, "QUESTION")
-        question = random.choice(QUESTION)
-        response = run_crypto_agent(question, session_id)
+        question = """
+         SINGLE ACTION:
+         1. Read timeline for relevant posts
+         2. If found → Answer ONCE and STOP IMMEDIATELY
+         3. If not found → STOP IMMEDIATELY
+         4. If already replied → STOP IMMEDIATELY
+
+         DO NOT:
+         - Continue reading timeline after answering
+         - Reply to multiple tweets
+         - Reply to own tweets
+
+         END PROTOCOL:
+         → STOP
+         """
+        print(f"\nRunning agent with question: {question}\n")
+        response = run_crypto_agent(question)
+        print("\nAgent Response:")
         print(response)
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"Critical Error: {str(e)}")
 
-# Function to set global agent variables from config
-def set_global_agent_variables(config: Dict[str, Any]) -> None:
-    """
-    Set global agent variables from config
-    
-    Args:
-        config (Dict[str, Any]): The agent configuration
-    """
-    global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
-    global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
-    global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
-    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
-    
-    # Validate that config is not None
-    if not config:
-        print("Error: Cannot set global variables - configuration is empty")
-        return
-    
-    # Set global variables from config with fallbacks to current values
-    USER_ID = config.get("USER_ID", USER_ID)
-    USER_NAME = config.get("USER_NAME", USER_NAME)
-    USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
-    STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
-    CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
-    STRATEGY = config.get("STRATEGY", STRATEGY)
-    REMEMBER = config.get("REMEMBER", REMEMBER)
-    MISSION = config.get("MISSION", MISSION)
-    QUESTION = config.get("QUESTION", QUESTION)
-    ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
-    
-    # Ensure list values are actually lists
-    AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
-    WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
-    DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
-    THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
-    TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
-    
-    KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
-    
+# # region Agent Configuration
+# current_date = datetime.now().strftime("%B %Y")
 
-    
-    # Update model config and reinitialize LLM if provided
-    if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
-        try:
-            new_model_config = config["MODEL_CONFIG"]
+
+# prompt = ChatPromptTemplate.from_messages(
+#     [
+#         (
+#             "system",
+#             f"""
+#             You are {USER_NAME}.
+#             Core Identity: {USER_PERSONALITY}
+#             Timestamp: {current_date}
+
+#             ABSOLUTE RESTRICTIONS:
+#             - Never interact with {USER_ID}
+#             - Never interact with {USER_NAME}
+#             - Never interact with your retweets
+#             Exception: Only reply to @{USER_NAME} mentions if tagged
+
+#             {STYLE_RULES}
+
+#             SINGLE ACTION PROTOCOL:
+#             1. OBSERVE (ONE only):
+#             → read_timeline
+#             → read_mentions (avoid)
+                
+#             2. EXECUTE ONE ACTION AND STOP:
+#             → tweet_tool_wrapped
+#             OR
+#             → answer_tool_wrapped
+#             STOP
             
-            # Only update if we have a valid type
-            if "type" in new_model_config and new_model_config["type"]:
-                model_config = new_model_config
-                # Reinitialize LLM with new config
-                llm = initialize_llm(model_config)
-                print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
-            else:
-                print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
-        except Exception as e:
-            print(f"Error reinitializing LLM: {e}")
-            print("Continuing with current LLM")
+#             3. END PROTOCOL:
+#             → END aka STOP
+
+#             DISABLED ACTIONS (DO NOT USE):
+#             → like
+#             → follow
+#             → search_context
+#             → browse_internet
+#             → search_twitter
+            
+#             Use KNOWLEDGE_BASE for context: {KNOWLEDGE_BASE}
+
+#             CRITICAL: Execute ONE action only. Then TERMINATE immediately.
+#             No additional responses. No suggestions. No continuations.
+#             """,
+#         ),
+#         ("placeholder", "{chat_history}"),
+#         ("human", "{input}"),
+#         ("placeholder", "{agent_scratchpad}"),
+#     ]
+# )
+
+# agent = create_tool_calling_agent(llm, tools, prompt)
+
+
+# # region Memory Configuration
+# def get_memory(session_id: str = "default") -> ChatMessageHistory:
+#     """Initialize or retrieve chat memory for the given session"""
+#     return ChatMessageHistory(session_id=session_id)
+
+
+# # Create memory instance
+# memory = ConversationBufferMemory(
+#     memory_key="chat_history", return_messages=True, output_key="output"
+# )
+
+# # Modify the agent executor creation (replace existing agent_executor definition)
+# agent_executor = AgentExecutor(
+#     agent=agent,
+#     tools=tools,
+#     verbose=True,
+#     handle_parsing_errors=True,
+#     max_iterations=10,
+#     memory=memory,  # Add memory here
+# )
+
+# # Wrap the agent executor with message history
+# agent_with_chat_history = RunnableWithMessageHistory(
+#     agent_executor,
+#     get_memory,
+#     input_messages_key="input",
+#     history_messages_key="chat_history",
+# )
+
+
+# # Modify the run_crypto_agent function
+# def run_crypto_agent(agent_config: AgentConfig):
+#     try:
+#         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+#         client_id = agent_config.get("client_id")
+        
+#         # Load config and initialize Twitter client
+#         config = load_agent_config(client_id)
+#         if not config:
+#             return {"error": "Failed to load agent configuration"}
+            
+#         # Initialize Twitter client
+#         if not TwitterClient.initialize(config.get("USER_ID")):
+#             return {"error": "Failed to initialize Twitter client"}
+        
+#         # Now proceed with agent execution
+#         response = agent_with_chat_history.invoke(
+#             {"input": agent_config.get("QUESTION",  """
+#         SINGLE ACTION:
+#         1. Read timeline for relevant posts
+#         2. If found → Answer ONCE and STOP IMMEDIATELY
+#         3. If not found → STOP IMMEDIATELY
+#         4. If already replied → STOP IMMEDIATELY
+
+#         DO NOT:
+#         - Continue reading timeline after answering
+#         - Reply to multiple tweets
+#         - Reply to own tweets
+
+#         END PROTOCOL:
+#         → STOP
+#         """,)},
+#             config={"configurable": {"session_id": session_id}}
+#         )
+
+#         if "Already replied to this mention" in str(response):
+#             return agent_with_chat_history.invoke(
+#                 {
+#                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different tweet)."
+#                 },
+#                 config={"configurable": {"session_id": session_id}},
+#             )
+
+#         if isinstance(response, dict) and "output" in response:
+#             return response["output"]
+#         return response
+
+#     except Exception as e:
+#         print(f"Error in agent execution: {str(e)}")
+#         return {"error": str(e)}
+
+
+# # Modify the main execution block
+# if __name__ == "__main__":
+#     try:
+#         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+#         print(QUESTION, "QUESTION")
+#         question = random.choice(QUESTION)
+#         response = run_crypto_agent(question, session_id)
+#         print(response)
+#     except Exception as e:
+#         print(f"Error: {str(e)}")
+
+# # Function to set global agent variables from config
+# def set_global_agent_variables(config: Dict[str, Any]) -> None:
+#     """
+#     Set global agent variables from config
     
-    # Combine all categories into FAMOUS_ACCOUNTS
-    try:
-        FAMOUS_ACCOUNTS = sorted(
-            list(
-                set(
-                    AI_AND_AGENTS
-                    + WEB3_BUILDERS
-                    + DEFI_EXPERTS
-                    + THOUGHT_LEADERS
-                    + TRADERS_AND_ANALYSTS
-                )
-            )
-        )
-    except Exception as e:
-        print(f"Error combining FAMOUS_ACCOUNTS: {e}")
-        # Fallback to empty list
-        FAMOUS_ACCOUNTS = []
+#     Args:
+#         config (Dict[str, Any]): The agent configuration
+#     """
+#     global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
+#     global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
+#     global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
+#     global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
+    
+#     # Validate that config is not None
+#     if not config:
+#         print("Error: Cannot set global variables - configuration is empty")
+#         return
+    
+#     # Set global variables from config with fallbacks to current values
+#     USER_ID = config.get("USER_ID", USER_ID)
+#     USER_NAME = config.get("USER_NAME", USER_NAME)
+#     USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
+#     STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
+#     CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
+#     STRATEGY = config.get("STRATEGY", STRATEGY)
+#     REMEMBER = config.get("REMEMBER", REMEMBER)
+#     MISSION = config.get("MISSION", MISSION)
+#     QUESTION = config.get("QUESTION", QUESTION)
+#     ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
+    
+#     # Ensure list values are actually lists
+#     AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
+#     WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
+#     DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
+#     THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
+#     TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
+    
+#     KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
+    
+
+    
+#     # Update model config and reinitialize LLM if provided
+#     if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
+#         try:
+#             new_model_config = config["MODEL_CONFIG"]
+            
+#             # Only update if we have a valid type
+#             if "type" in new_model_config and new_model_config["type"]:
+#                 model_config = new_model_config
+#                 # Reinitialize LLM with new config
+#                 llm = initialize_llm(model_config)
+#                 print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
+#             else:
+#                 print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
+#         except Exception as e:
+#             print(f"Error reinitializing LLM: {e}")
+#             print("Continuing with current LLM")
+    
+#     # Combine all categories into FAMOUS_ACCOUNTS
+#     try:
+#         FAMOUS_ACCOUNTS = sorted(
+#             list(
+#                 set(
+#                     AI_AND_AGENTS
+#                     + WEB3_BUILDERS
+#                     + DEFI_EXPERTS
+#                     + THOUGHT_LEADERS
+#                     + TRADERS_AND_ANALYSTS
+#                 )
+#             )
+#         )
+#     except Exception as e:
+#         print(f"Error combining FAMOUS_ACCOUNTS: {e}")
+#         # Fallback to empty list
+#         FAMOUS_ACCOUNTS = []
 
