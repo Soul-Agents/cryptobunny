@@ -25,19 +25,16 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
 from langchain_core.runnables.history import RunnableWithMessageHistory
-from langchain.memory import  MongoDBChatMessageHistory
 from pymongo import MongoClient
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_community.chat_message_histories import MongoDBChatMessageHistory
+
 
 # Load environment variables
 load_dotenv(override=True)
 
 # region Environment Configuration
-# API_KEY = os.getenv("API_KEY")
-# API_SECRET_KEY = os.getenv("API_SECRET_KEY")
-# BEARER_TOKEN = os.getenv("BEARER_TOKEN")
-# ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-# ACCESS_TOKEN_SECRET = os.getenv("ACCESS_TOKEN_SECRET")
+
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
