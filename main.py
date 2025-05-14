@@ -1322,8 +1322,12 @@ prompt = ChatPromptTemplate.from_messages(
             f"""
             You are {USER_NAME},
             remember your personality: {USER_PERSONALITY}.
-            Timestamp: {current_date}
-            {STYLE_RULES}
+            Timestamp: {current_date}.
+            You will obey given style rules: {STYLE_RULES}.
+            Content restrictions: {CONTENT_RESTRICTIONS}.
+            Knowledge base: {KNOWLEDGE_BASE}.
+            Example X posts: {EXAMPLE_TWEETS}.
+            Accounts to follow: {ACCOUNTS_TO_FOLLOW}.
             Use the provided chat history to maintain context.
             """, # Simplified prompt example
         ),
