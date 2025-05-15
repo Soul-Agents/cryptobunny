@@ -358,7 +358,7 @@ except Exception as e:
 #     retriever = None
 # endregion
 
-
+from app.utils.encryption import encrypt_dict_values, decrypt_dict_values
 class TwitterClient:
     """Singleton class for managing Twitter client"""
     _instance = None
@@ -366,23 +366,41 @@ class TwitterClient:
     _initialized = False
     
     @classmethod
-    def initialize(cls, user_id: str) -> bool:
+    def initialize(cls, client_id: str) -> bool:
         """Initialize the Twitter client with user credentials"""
         try:
+            SENSITIVE_FIELDS = [
+            'api_key',
+        'api_secret_key',
+        'access_token',
+        'access_token_secret',
+        'bearer_token',
+        'temp_request_token',
+        'temp_request_secret'
+            ]
+
             with get_db() as db:
-                auth = db.get_twitter_auth(user_id)
+                auth = db.get_twitter_auth(client_id)
+                decrypted_auth = decrypt_dict_values(auth, SENSITIVE_FIELDS)
+                API_KEY = decrypted_auth["api_key"]
+                API_SECRET = decrypted_auth["api_secret_key"]
+                ACCESS_TOKEN = decrypted_auth["access_token"]
+                ACCESS_TOKEN_SECRET = decrypted_auth["access_token_secret"]
+             
+                print(auth, "auth in twitter class")
                 if not auth:
-                    print(f"No Twitter authentication found for user {user_id}")
+                    print(f"No Twitter authentication found for user {client_id}")
                     return False
                 
                 cls._client = tweepy.Client(
-                    consumer_key=auth.get("api_key"),
-                    consumer_secret=auth.get("api_secret_key"),
-                    access_token=auth.get("access_token"),
-                    access_token_secret=auth.get("access_token_secret"),
+                    consumer_key=API_KEY,
+                    consumer_secret=API_SECRET,
+                    access_token=ACCESS_TOKEN,
+                    access_token_secret=ACCESS_TOKEN_SECRET,
                     wait_on_rate_limit=True
                 )
                 cls._initialized = True
+                # print(cls._client.get_me(), "TWEETER USER")
                 print("Twitter client initialized successfully")
                 return True
         except Exception as e:
@@ -1333,9 +1351,9 @@ prompt = ChatPromptTemplate.from_messages(
         
             """, 
         ),
-        MessagesPlaceholder(variable_name=MEMORY_KEY), # Use the constant
-        ("human", "{input}"),
-        MessagesPlaceholder(variable_name="agent_scratchpad"),
+         ("placeholder", "{chat_history}"),
+         ("human", "{input}"),
+         ("placeholder", "{agent_scratchpad}"),
     ]
 )
 
@@ -1352,20 +1370,21 @@ agent_executor = AgentExecutor(
     handle_parsing_errors=True # Good practice
 )
 
-# 8. Create the RunnableWithMessageHistory
-agent_with_chat_history = RunnableWithMessageHistory(
-    agent_executor,
-    get_session_history, # Function to retrieve history based on session_id
-    input_messages_key="input", # Key for the user's input
-    history_messages_key=MEMORY_KEY, # Key for the chat history in the prompt
-)
+
+# # 8. Create the RunnableWithMessageHistory
+# agent_with_chat_history = RunnableWithMessageHistory(
+#     agent_executor,
+#     get_session_history, # Function to retrieve history based on session_id
+#     input_messages_key="input", # Key for the user's input
+#     history_messages_key=MEMORY_KEY, # Key for the chat history in the prompt
+# )
 
 # 9. Update the run function to use the RunnableWithMessageHistory directly
 def run_crypto_agent(agent_config: AgentConfig):
     """Runs the agent with persistent history for the defined SESSION_ID."""
     try:
         # Configuration includes the session_id for history retrieval
-        config = {"configurable": {"session_id": SESSION_ID}}
+        # config = {"configurable": {"session_id": SESSION_ID}}
         question = """
          SINGLE ACTION:
          1. Read timeline for relevant posts
@@ -1383,20 +1402,20 @@ def run_crypto_agent(agent_config: AgentConfig):
          """
         # session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         client_id = agent_config.get("client_id")
-        
+        print(client_id, "client_id")
         # Load config and initialize Twitter client
         config = load_agent_config(client_id)
+        print(config, "config")
         if not config:
             return {"error": "Failed to load agent configuration"}
             
         # Initialize Twitter client
-        if not TwitterClient.initialize(config.get("USER_ID")):
+        if not TwitterClient.initialize(client_id):
             return {"error": "Failed to initialize Twitter client"}
 
         # Invoke the agent wrapped with history management
-        result = agent_with_chat_history.invoke(
+        result = agent_executor.invoke(
             {"input": question},
-            config=config
         )
         
         # The output is typically in result['output']

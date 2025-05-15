@@ -539,7 +539,7 @@ def cleanup_twitter_auth(client_id):
         }), 500
 
 @agent_bp.route('/payment/<client_id>', methods=['POST'])
-@require_auth
+# @require_auth
 def process_agent_payment(client_id):
     """
     Process payment for a client's agent and mark it as paid
@@ -603,7 +603,6 @@ def process_agent_payment(client_id):
             }}
         )
         
-        
         if update_result.modified_count == 0:
             return jsonify({
                 "status": "error",
@@ -616,18 +615,38 @@ def process_agent_payment(client_id):
         # Convert datetime to string for JSON serialization
         updated_config_json = json.loads(json.dumps(updated_config, default=str))
         
-        main.run_crypto_agent(update_agent_config)
+        # Start agent execution in a background thread
+        def run_agent_background():
+            try:
+                # Store original values
+                original_user_id = main.USER_ID
+                original_user_name = main.USER_NAME
+                
+                try:
+                    main.set_global_agent_variables(updated_config)
+                    main.run_crypto_agent(updated_config)
+                finally:
+                    # Restore original values
+                    main.USER_ID = original_user_id
+                    main.USER_NAME = original_user_name
+            except Exception as e:
+                print(f"Error running agent after payment: {str(e)}")
+        
+        # Start the background thread
+        import threading
+        agent_thread = threading.Thread(target=run_agent_background)
+        agent_thread.daemon = True
+        agent_thread.start()
 
         return jsonify({
             "success": True,
-            # "message": "Agent payment processed successfully",
-            # "payment": {
-            #     "amount": amount,
-            #     "payment_id": payment_id,
-            #     "payment_date": datetime.now(timezone.utc).isoformat(),
-            #     "client_id": client_id
-            # },
-            # "configuration": updated_config_json
+            "message": "Payment processed successfully and agent started",
+            "payment": {
+                "amount": amount,
+                "payment_id": payment_id,
+                "payment_date": datetime.now(timezone.utc).isoformat(),
+                "client_id": client_id
+            }
         })
     
     except Exception as e:
@@ -739,6 +758,9 @@ def run_agents():
             }), 401
         
         import threading
+        from concurrent.futures import ThreadPoolExecutor
+        import queue
+
         # Get the database connection
         db = get_db()
         
@@ -750,13 +772,14 @@ def run_agents():
                 "status": "success",
                 "message": "No active and paid agents found"
             })
+
+        # Create a queue for logging messages
+        log_queue = queue.Queue()
+        
         def run_agent_thread(agent_config):
             try:
-                print(agent_config, "agent_config")
-
                 client_id = agent_config.get("client_id")
                 agent_name = agent_config.get("agent_name", "default")
-                
                 
                 # Store original values to restore later
                 original_user_id = main.USER_ID
@@ -769,7 +792,7 @@ def run_agents():
                     # Execute the agent
                     main.run_crypto_agent(agent_config)
                     
-                    print(f"Agent executed successfully: {client_id}/{agent_name}")
+                    log_queue.put(f"Agent executed successfully: {client_id}/{agent_name}/{original_user_name}")
                 
                 finally:
                     # Restore original variables
@@ -777,20 +800,23 @@ def run_agents():
                     main.USER_NAME = original_user_name
             
             except Exception as e:
-                print(f"Error executing agent {agent_config.get('client_id')}/{agent_config.get('agent_name')}: {str(e)}")
-        
-        # Start a thread for each agent
-        threads = []
-        for agent in active_agents:
-            thread = threading.Thread(target=run_agent_thread, args=(agent,))
-            thread.daemon = True  # Make threads daemon so they don't block application shutdown
-            thread.start()
-            threads.append(thread)
+                log_queue.put(f"Error executing agent {agent_config.get('client_id')}/{agent_config.get('agent_name')}: {str(e)}")
+
+        # Use ThreadPoolExecutor to manage concurrent agent execution
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            # Submit all agents to the executor
+            future_to_agent = {executor.submit(run_agent_thread, agent): agent for agent in active_agents}
+            
+        # Process any logs that were generated
+        logs = []
+        while not log_queue.empty():
+            logs.append(log_queue.get())
         
         return jsonify({
             "status": "success",
-            "message": f"Started execution of {len(active_agents)} agents",
-            "agent_count": len(active_agents)
+            "message": f"Completed execution of {len(active_agents)} agents",
+            "agent_count": len(active_agents),
+            "execution_logs": logs
         })
     
     except Exception as e:
