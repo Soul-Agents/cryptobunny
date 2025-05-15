@@ -1330,26 +1330,7 @@ prompt = ChatPromptTemplate.from_messages(
             Accounts to follow: {FAMOUS_ACCOUNTS}.
             Use the provided chat history to maintain context.
 
-            SINGLE ACTION PROTOCOL:
-              1. OBSERVE (ONE only):
-              → read_timeline
-                
-             2. EXECUTE ONE ACTION AND STOP:
-             → tweet_tool_wrapped
-             OR
-             → answer_tool_wrapped
-             STOP
-            
-             3. END PROTOCOL:
-             → END aka STOP
-
-            DISABLED ACTIONS (DO NOT USE):
-            → like
-            → follow
-            → search_context
-            → browse_internet
-            → search_twitter
-            
+        
             """, 
         ),
         MessagesPlaceholder(variable_name=MEMORY_KEY), # Use the constant
