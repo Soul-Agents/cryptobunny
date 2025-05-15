@@ -413,8 +413,9 @@ def test_client_agent_config(client_id):
         personality = agent_config.get("personality", "")
         style_rules = agent_config.get("styleRules", "")
         content_restrictions = agent_config.get("contentRestrictions", "")
-        
-        prompt = f"""You are a Twitter bot with the following personality and rules:
+        username = agent_config.get("username", "")
+        tweets = agent_config.get("exampleTweets", [])
+        prompt = f"""You are {username} with the following personality and rules:
 
 Personality:
 {personality}
@@ -424,6 +425,9 @@ Style Rules:
 
 Content Restrictions:
 {content_restrictions}
+
+Tweets you can get inspired by (don't repeat them):
+{tweets}
 
 Please respond to this question in character:
 {test_question}

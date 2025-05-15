@@ -70,7 +70,7 @@ THOUGHT_LEADERS = []
 TRADERS_AND_ANALYSTS = []
 KNOWLEDGE_BASE = ""
 FAMOUS_ACCOUNTS = []
-
+EXAMPLE_TWEETS = []
 # endregion
 
 
@@ -1326,10 +1326,31 @@ prompt = ChatPromptTemplate.from_messages(
             You will obey given style rules: {STYLE_RULES}.
             Content restrictions: {CONTENT_RESTRICTIONS}.
             Knowledge base: {KNOWLEDGE_BASE}.
-            Example X posts: {EXAMPLE_TWEETS}.
-            Accounts to follow: {ACCOUNTS_TO_FOLLOW}.
+            Example X posts that you can get inspired by (don't repeat them): {EXAMPLE_TWEETS}.
+            Accounts to follow: {FAMOUS_ACCOUNTS}.
             Use the provided chat history to maintain context.
-            """, # Simplified prompt example
+
+            SINGLE ACTION PROTOCOL:
+              1. OBSERVE (ONE only):
+              → read_timeline
+                
+             2. EXECUTE ONE ACTION AND STOP:
+             → tweet_tool_wrapped
+             OR
+             → answer_tool_wrapped
+             STOP
+            
+             3. END PROTOCOL:
+             → END aka STOP
+
+            DISABLED ACTIONS (DO NOT USE):
+            → like
+            → follow
+            → search_context
+            → browse_internet
+            → search_twitter
+            
+            """, 
         ),
         MessagesPlaceholder(variable_name=MEMORY_KEY), # Use the constant
         ("human", "{input}"),
@@ -1582,78 +1603,61 @@ if __name__ == "__main__":
 #         print(f"Error: {str(e)}")
 
 # # Function to set global agent variables from config
-# def set_global_agent_variables(config: Dict[str, Any]) -> None:
-#     """
-#     Set global agent variables from config
+def set_global_agent_variables(config: Dict[str, Any]) -> None:
+    """
+    Set global agent variables from config
     
-#     Args:
-#         config (Dict[str, Any]): The agent configuration
-#     """
-#     global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
-#     global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
-#     global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
-#     global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
+    Args:
+        config (Dict[str, Any]): The agent configuration
+    """
+    global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
+    global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
+    global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
+    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
     
-#     # Validate that config is not None
-#     if not config:
-#         print("Error: Cannot set global variables - configuration is empty")
-#         return
+    # Validate that config is not None
+    if not config:
+        print("Error: Cannot set global variables - configuration is empty")
+        return
     
-#     # Set global variables from config with fallbacks to current values
-#     USER_ID = config.get("USER_ID", USER_ID)
-#     USER_NAME = config.get("USER_NAME", USER_NAME)
-#     USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
-#     STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
-#     CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
-#     STRATEGY = config.get("STRATEGY", STRATEGY)
-#     REMEMBER = config.get("REMEMBER", REMEMBER)
-#     MISSION = config.get("MISSION", MISSION)
-#     QUESTION = config.get("QUESTION", QUESTION)
-#     ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
+    # Set global variables from config with fallbacks to current values
+    USER_ID = config.get("USER_ID", USER_ID)
+    USER_NAME = config.get("USER_NAME", USER_NAME)
+    USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
+    STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
+    CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
+    STRATEGY = config.get("STRATEGY", STRATEGY)
+    REMEMBER = config.get("REMEMBER", REMEMBER)
+    MISSION = config.get("MISSION", MISSION)
+    QUESTION = config.get("QUESTION", QUESTION)
+    ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
     
-#     # Ensure list values are actually lists
-#     AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
-#     WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
-#     DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
-#     THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
-#     TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
-    
-#     KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
+    # Ensure list values are actually lists
+    AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
+    WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
+    DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
+    THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
+    TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
+    FAMOUS_ACCOUNTS = config.get("FAMOUS_ACCOUNTS", FAMOUS_ACCOUNTS) or []
+    KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
     
 
     
-#     # Update model config and reinitialize LLM if provided
-#     if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
-#         try:
-#             new_model_config = config["MODEL_CONFIG"]
+    # Update model config and reinitialize LLM if provided
+    if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
+        try:
+            new_model_config = config["MODEL_CONFIG"]
             
-#             # Only update if we have a valid type
-#             if "type" in new_model_config and new_model_config["type"]:
-#                 model_config = new_model_config
-#                 # Reinitialize LLM with new config
-#                 llm = initialize_llm(model_config)
-#                 print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
-#             else:
-#                 print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
-#         except Exception as e:
-#             print(f"Error reinitializing LLM: {e}")
-#             print("Continuing with current LLM")
+            # Only update if we have a valid type
+            if "type" in new_model_config and new_model_config["type"]:
+                model_config = new_model_config
+                # Reinitialize LLM with new config
+                llm = initialize_llm(model_config)
+                print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
+            else:
+                print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
+        except Exception as e:
+            print(f"Error reinitializing LLM: {e}")
+            print("Continuing with current LLM")
     
-#     # Combine all categories into FAMOUS_ACCOUNTS
-#     try:
-#         FAMOUS_ACCOUNTS = sorted(
-#             list(
-#                 set(
-#                     AI_AND_AGENTS
-#                     + WEB3_BUILDERS
-#                     + DEFI_EXPERTS
-#                     + THOUGHT_LEADERS
-#                     + TRADERS_AND_ANALYSTS
-#                 )
-#             )
-#         )
-#     except Exception as e:
-#         print(f"Error combining FAMOUS_ACCOUNTS: {e}")
-#         # Fallback to empty list
-#         FAMOUS_ACCOUNTS = []
-
+   
