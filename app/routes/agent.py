@@ -539,7 +539,7 @@ def cleanup_twitter_auth(client_id):
         }), 500
 
 @agent_bp.route('/payment/<client_id>', methods=['POST'])
-# @require_auth
+@require_auth
 def process_agent_payment(client_id):
     """
     Process payment for a client's agent and mark it as paid
