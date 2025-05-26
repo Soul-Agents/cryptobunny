@@ -5,6 +5,17 @@ import base64
 import os
 from app.config.config import Config
 
+
+SENSITIVE_FIELDS = [
+    'api_key',
+    'api_secret_key',
+    'access_token',
+    'access_token_secret',
+    'bearer_token',
+    'temp_request_token',
+    'temp_request_secret'
+]
+
 def get_or_create_key():
     """
     Get the encryption key from environment or create a new one

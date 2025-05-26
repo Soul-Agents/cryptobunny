@@ -17,7 +17,6 @@ def require_auth(f):
             decodedKey = base64.b64decode(VERIFICATION_KEY).decode("utf-8")
 
             auth_header = request.headers.get("Authorization")
-            print(auth_header)
             if not auth_header:
                 return jsonify({
                     "status": "error",
@@ -25,7 +24,6 @@ def require_auth(f):
                 }), 401
 
             token = auth_header.replace("Bearer ", "")
-            print(token)
             decoded = jwt.decode(
                 token,
                 decodedKey,

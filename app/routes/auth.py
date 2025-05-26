@@ -11,6 +11,7 @@ from app.models.agent import AgentConfig
 from app.config.config import Config
 from app.utils.encryption import encrypt_dict_values, decrypt_dict_values
 from app.utils.protect import require_auth
+from app.utils.bearer import generate_bearer_token
 # from jwt import jwt
 # Create Blueprint
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -34,6 +35,7 @@ SENSITIVE_FIELDS = [
 
 
 @auth_bp.route('/save-twitter-keys', methods=['POST'])
+@require_auth
 def save_twitter_keys():
     """
     Save Twitter API key and API secret key from the frontend with encryption
@@ -68,12 +70,13 @@ def save_twitter_keys():
         # Check if there are agent configurations for this client
         agent_configs = list(db.agent_config.find({"client_id": clientId}))
         has_agent_config = len(agent_configs) > 0
-        
+        bearer_token = generate_bearer_token(apiKey, apiSecretKey)
         # Prepare auth data with encryption
         auth_data = {
             "client_id": clientId,
             "api_key": apiKey,
             "api_secret_key": apiSecretKey,
+            "bearer_token": bearer_token,
             "has_agent_config": has_agent_config,
             "updated_at": datetime.now(timezone.utc)
         }
@@ -115,6 +118,39 @@ def save_twitter_keys():
             "status": "error",
             "message": f"Failed to save Twitter API keys: {str(e)}"
         }), 500
+
+@auth_bp.route('/api-keys/<client_id>', methods=['DELETE'])
+def delete_twitter_credentials(client_id):
+    """
+    Delete Twitter API keys from the database
+    """
+    try:
+        db = get_db()
+        auth = db.twitter_auth.find_one({"client_id": client_id})
+        if not auth:
+            return jsonify({
+                "success": False,
+                "message": "Twitter API keys not found"
+            }), 404
+        db.twitter_auth.update_one(
+            {"client_id": client_id},
+            {"$set": {
+                "api_key": None,
+                "api_secret_key": None,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
+        return jsonify({
+            "success": True,
+            "message": "Twitter API keys deleted successfully"
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Failed to delete Twitter API keys: {str(e)}"
+        }), 500
+
+
 
 # @auth_bp.route('/credentials/<client_id>', methods=['GET'])
 # def twitter_credentials(client_id):
@@ -352,6 +388,8 @@ def twitter_callback():
         # Get the authenticated user
         user = client.get_me(user_auth=True)
         
+        
+
         # Create the auth data object
         auth_data = {
             "client_id": client_id,
@@ -375,7 +413,15 @@ def twitter_callback():
         
         # Save to database
         result = db.add_twitter_auth(TwitterAuth(**encrypted_auth_data))
-        
+
+        agent_config = db.agent_config.update_one(
+            {"client_id": client_id},
+            {"$set": {
+                "agent_name": user.data.username,
+                "updated_at": datetime.now(timezone.utc),
+                "is_twitter_authorized": True
+            }}
+        )
         frontend_redirect = f"{redirect_url}/app/payment?client_id={client_id}&auth=success&username={user.data.username}"
         return redirect(frontend_redirect)
     

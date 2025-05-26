@@ -21,40 +21,54 @@ class JSONEncoder(json.JSONEncoder):
 class TweetDB:
     """Database access class for CryptoBunny application"""
     
-    # Class variable for singleton instance
-    _instance = None
-    
     def __init__(self):
         """Initialize database connection"""
-        # Skip initialization if this is a singleton reuse
-        if hasattr(self, 'initialized') and self.initialized:
-            return
+        self.initialized = False
+        self.connect()
+    
+    def connect(self):
+        """Establish database connection"""
+        if not self.initialized:
+            mongo_uri = os.getenv("MONGODB_URL", "mongodb://localhost:27017/cryptobunny")
+            self.client = MongoClient(
+                mongo_uri,
+                serverSelectionTimeoutMS=10000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=10000,
+                retryWrites=True,
+                retryReads=True,
+            )
+            self.db = self.client["tweets"]
             
-        mongo_uri = os.getenv("MONGODB_URL", "mongodb://localhost:27017/cryptobunny")
-        self.client = MongoClient(
-            mongo_uri,
-            serverSelectionTimeoutMS=10000,
-            connectTimeoutMS=10000,
-            socketTimeoutMS=10000,
-            retryWrites=True,
-            retryReads=True,
-        )
-        self.db = self.client["tweets"]
-        
-        # Collections
-        self.twitter_auth = self.db.twitter_auth
-        self.agent_config = self.db.agent_config
-        self.written_ai_tweets = self.db.written_ai_tweets
-        self.written_ai_tweet_replies = self.db.written_ai_tweet_replies
+            # Collections
+            self.twitter_auth = self.db.twitter_auth
+            self.agent_config = self.db.agent_config
+            self.written_ai_tweets = self.db.written_ai_tweets
+            self.written_ai_tweet_replies = self.db.written_ai_tweet_replies
+            self.rate_limits = self.db.rate_limits
 
-        
-        # Mark as initialized
-        self.initialized = True
+            # Create indexes for rate_limits collection
+            self.rate_limits.create_index([("client_id", pymongo.ASCENDING)], unique=True)
+            self.rate_limits.create_index([("cached_until", pymongo.ASCENDING)])
+            
+            self.initialized = True
+    
+    def ensure_connected(self):
+        """Ensure database connection is active"""
+        if not self.initialized:
+            self.connect()
+        try:
+            # Ping the database to check connection
+            self.client.admin.command('ping')
+        except:
+            self.initialized = False
+            self.connect()
     
     def close(self):
         """Close the database connection"""
-        self.client.close()
-        self.initialized = False
+        if self.initialized:
+            self.client.close()
+            self.initialized = False
     
     # --- Twitter Authentication Methods ---
     
@@ -300,21 +314,14 @@ class TweetDB:
         }
     
     def get_last_written_ai_tweet_replies(self, user_id: str, limit: int = 10) -> List[Dict[str, Any]]:
-        """
-        Get the most recent replies written by an AI agent for a user
-        
-        Args:
-            user_id: Twitter user ID to get replies for
-            limit: Maximum number of replies to return
-            
-        Returns:
-            List of reply dictionaries
-        """
+        """Get the most recent AI-written tweet replies for a user"""
         return list(
-            self.written_ai_tweet_replies.find(
-                {"user_id": user_id}
-            ).sort("created_at", pymongo.DESCENDING).limit(limit)
+            self.written_ai_tweet_replies
+            .find({"user_id": user_id})
+            .sort("created_at", -1)
+            .limit(limit)
         )
+
     def get_all_active_paid_agents(self) -> List[Dict[str, Any]]:
         """
         Get all active and paid agent configurations
@@ -328,6 +335,85 @@ class TweetDB:
         })
         
         return list(result)
+
+    # --- Rate Limits Methods ---
+    
+    def get_rate_limits(self, client_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get rate limits for a client
+        
+        Args:
+            client_id: Client ID to retrieve rate limits for
+            
+        Returns:
+            Dictionary with rate limits or None if not found
+        """
+        return self.rate_limits.find_one({"client_id": client_id})
+    
+    def update_rate_limits(self, client_id: str, rate_limits: Dict[str, Any], cached_until: datetime) -> Dict[str, Any]:
+        """
+        Update rate limits for a client
+        
+        Args:
+            client_id: Client ID to update rate limits for
+            rate_limits: Dictionary containing rate limit data
+            cached_until: Datetime when cache expires
+            
+        Returns:
+            Dictionary with operation result
+        """
+        now = datetime.now(timezone.utc)
+        
+        update_data = {
+            "client_id": client_id,
+            "rate_limits": rate_limits,
+            "last_checked": now,
+            "cached_until": cached_until,
+            "has_rate_limit_error": False,
+            "updated_at": now
+        }
+        
+        result = self.rate_limits.update_one(
+            {"client_id": client_id},
+            {"$set": update_data},
+            upsert=True
+        )
+        
+        return {
+            "status": "success",
+            "message": "Rate limits updated",
+            "modified_count": result.modified_count if result.matched_count > 0 else 0,
+            "upserted_id": str(result.upserted_id) if result.upserted_id else None
+        }
+    
+    def mark_rate_limit_error(self, client_id: str, reset_time: datetime) -> Dict[str, Any]:
+        """
+        Mark a client as rate limited
+        
+        Args:
+            client_id: Client ID to mark as rate limited
+            reset_time: When the rate limit will reset
+            
+        Returns:
+            Dictionary with operation result
+        """
+        result = self.rate_limits.update_one(
+            {"client_id": client_id},
+            {
+                "$set": {
+                    "has_rate_limit_error": True,
+                    "rate_limit_reset": reset_time,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+        
+        return {
+            "status": "success",
+            "message": "Rate limit error marked",
+            "modified_count": result.modified_count
+        }
+
 # Singleton instance
 _db_instance = None
 
@@ -335,19 +421,16 @@ _db_instance = None
 
 def get_db() -> TweetDB:
     """Get a database instance using singleton pattern"""
-    print("Getting db instance")
     global _db_instance
-    if _db_instance is None:
-        print("Creating new db instance")
+    if _db_instance is None or not _db_instance.initialized:
         _db_instance = TweetDB()
     return _db_instance
 
-# Add a function to explicitly close the connection when needed
 def close_db():
     """Close the database connection when application is shutting down"""
     global _db_instance
-    if _db_instance is not None:
+    if _db_instance is not None and _db_instance.initialized:
         _db_instance.close()
-        _db_instance = None 
+        _db_instance = None
 
 

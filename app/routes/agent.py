@@ -1,16 +1,18 @@
 import json
 import random
 from flask import Blueprint, request, jsonify
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import os
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from functools import wraps
-
+from app.utils.encryption import decrypt_dict_values, SENSITIVE_FIELDS
 from app.utils.db import get_db
 from app.models.agent import AgentConfig
+from app.utils.bearer import generate_bearer_token
 import main  # Import main module for agent execution
 import jwt
+import requests
 from app.utils.protect import require_auth
 # Create Blueprint
 agent_bp = Blueprint('agent', __name__, url_prefix='/agent')
@@ -40,6 +42,20 @@ DEFAULT_AGENT_CONFIG = {
     'is_active': False
 }
 
+def get_api_limit(bearer_token): 
+
+    if not bearer_token:
+        return {
+            "project_usage": 0,
+            "project_cap": 0,
+            "cap_reset_day": 0
+        }
+    headers = {
+        "Authorization": f"Bearer {bearer_token}"
+    }
+    res = requests.get("https://api.twitter.com/2/usage/tweets", headers=headers)
+    return res.json()
+
 def create_or_update_agent_config(data: Dict[str, Any]) -> Tuple[Dict[str, Any], bool, str]:
     """
     Create or update an agent configuration.
@@ -63,14 +79,24 @@ def create_or_update_agent_config(data: Dict[str, Any]) -> Tuple[Dict[str, Any],
         
         # Check for existing config
         existing_config = db.get_agent_config(client_id)
+        # auth_data = db.get_twitter_auth(client_id)
+        # decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        # bearer_token = decrypted_auth.get("bearer_token")
         
+        # if not bearer_token:
+        #     bearer_token = generate_bearer_token(decrypted_auth.get("api_key"), decrypted_auth.get("api_secret_key"))
+        # api_status = get_api_limit(bearer_token)
+
+        # print(api_status, "API STATUS")
+
         if existing_config:
             # Update existing config
             config = {
                 **existing_config,
                 **data,
                 'created_at': existing_config['created_at'],
-                'updated_at': now
+                'updated_at': now,
+              
             }
         else:
             # Create new config
@@ -93,6 +119,7 @@ def create_or_update_agent_config(data: Dict[str, Any]) -> Tuple[Dict[str, Any],
         return {}, False, f"Internal error: {str(e)}"
 
 @agent_bp.route('/config', methods=['POST'])
+@require_auth
 def create_agent_config():
     """Create or update an agent configuration"""
     try:
@@ -132,7 +159,10 @@ def get_client_agent_config(client_id):
     try:
         db = get_db()
         config = db.get_agent_config(client_id)
-        is_paid = db
+
+
+        # auth_data = db.get_twitter_auth(client_id)
+    
         if not config:
             return jsonify({
                 "status": "error",
@@ -538,6 +568,7 @@ def cleanup_twitter_auth(client_id):
             "message": f"Failed to clean up Twitter authentication data: {str(e)}"
         }), 500
 
+
 @agent_bp.route('/payment/<client_id>', methods=['POST'])
 @require_auth
 def process_agent_payment(client_id):
@@ -760,6 +791,8 @@ def run_agents():
         import threading
         from concurrent.futures import ThreadPoolExecutor
         import queue
+        from datetime import datetime, timezone
+        import time
 
         # Get the database connection
         db = get_db()
@@ -776,11 +809,34 @@ def run_agents():
         # Create a queue for logging messages
         log_queue = queue.Queue()
         
+        # Create a dictionary to track rate limits per agent
+        rate_limits = {}
+        rate_limits_lock = threading.Lock()
+
+        def check_rate_limit(agent_id):
+            """Check if agent is rate limited"""
+            with rate_limits_lock:
+                if agent_id in rate_limits:
+                    reset_time = rate_limits[agent_id]
+                    if reset_time > datetime.now(timezone.utc).timestamp():
+                        return True
+            return False
+
+        def mark_rate_limited(agent_id, reset_timestamp):
+            """Mark agent as rate limited"""
+            with rate_limits_lock:
+                rate_limits[agent_id] = reset_timestamp
+
         def run_agent_thread(agent_config):
             try:
                 client_id = agent_config.get("client_id")
                 agent_name = agent_config.get("agent_name", "default")
                 
+                # Check if agent is rate limited
+                if check_rate_limit(client_id):
+                    log_queue.put(f"Agent {client_id}/{agent_name} is rate limited, skipping execution")
+                    return
+
                 # Store original values to restore later
                 original_user_id = main.USER_ID
                 original_user_name = main.USER_NAME
@@ -789,10 +845,24 @@ def run_agents():
                     # Set global variables with our configuration
                     main.set_global_agent_variables(agent_config)
                     
-                    # Execute the agent
-                    main.run_crypto_agent(agent_config)
-                    
-                    log_queue.put(f"Agent executed successfully: {client_id}/{agent_name}/{original_user_name}")
+                    try:
+                        # Execute the agent
+                        main.run_crypto_agent(agent_config)
+                        log_queue.put(f"Agent executed successfully: {client_id}/{agent_name}")
+                    except Exception as e:
+                        # Check if it's a rate limit error
+                        error_str = str(e).lower()
+                        if 'rate limit' in error_str:
+                            # Extract reset timestamp from error if available
+                            # This is an example - adjust based on your actual error format
+                            try:
+                                reset_time = int(time.time()) + 900  # Default to 15 minutes if can't parse
+                                mark_rate_limited(client_id, reset_time)
+                                log_queue.put(f"Agent {client_id}/{agent_name} hit rate limit, will resume after reset")
+                            except:
+                                log_queue.put(f"Agent {client_id}/{agent_name} hit rate limit with unknown reset time")
+                        else:
+                            raise  # Re-raise if it's not a rate limit error
                 
                 finally:
                     # Restore original variables
@@ -823,6 +893,316 @@ def run_agents():
         return jsonify({
             "status": "error",
             "message": f"Failed to run agents: {str(e)}"
+        }), 500
+
+def get_twitter_rate_limits(client_id: str) -> Dict:
+    """
+    Get Twitter rate limits for a client, using cache if available and not expired
+    """
+    try:
+        db = get_db()
+
+        now = datetime.now(timezone.utc)
+        
+        # Check cache first
+        cached_limits = db.rate_limits.find_one({"client_id": client_id})
+        
+        # Return cached data if it's still valid
+        if cached_limits:
+            cached_until = cached_limits.get('cached_until')
+            print(cached_until)
+            # Ensure cached_until is timezone-aware
+            if isinstance(cached_until, datetime) and cached_until.tzinfo is None:
+                cached_until = cached_until.replace(tzinfo=timezone.utc)
+            
+            # Check if we're in a rate limit error state
+            if cached_limits.get('has_rate_limit_error'):
+                rate_limit_reset = cached_limits.get('rate_limit_reset')
+                if isinstance(rate_limit_reset, datetime) and rate_limit_reset.tzinfo is None:
+                    rate_limit_reset = rate_limit_reset.replace(tzinfo=timezone.utc)
+                
+                # If we're still in the rate limit period, return the cached error state
+                if rate_limit_reset and rate_limit_reset > now:
+                    return {
+                        "error": "Rate limit in effect",
+                        "limits": cached_limits['rate_limits'],
+                        "cached": True,
+                        "rate_limited": True,
+                        "rate_limit_reset": rate_limit_reset,
+                        "last_checked": cached_limits['last_checked']
+                    }
+                else:
+                    # Rate limit period has expired, clear the error state
+                    db.rate_limits.update_one(
+                        {"client_id": client_id},
+                        {"$set": {"has_rate_limit_error": False, "rate_limit_reset": None}}
+                    )
+            
+            # Return valid cached data
+            if cached_until > now:
+                return {
+                    "limits": cached_limits['rate_limits'],
+                    "cached": True,
+                    "last_checked": cached_limits['last_checked'],
+                    "next_check": cached_until,
+                    "rate_limited": False
+                }
+        else:
+            # Initialize default rate limits for new clients
+            print("Initializing default rate limits")
+            default_limits = {
+                "client_id": client_id,
+                "rate_limits": {
+                    "project_usage": 0,
+                    "project_cap": 100,
+                    "cap_reset_day": 0,
+                    "project_id": 0
+                },
+                "last_checked": now,
+                "cached_until": now,  # Will force immediate check
+                "has_rate_limit_error": False,
+                "rate_limit_reset": None
+            }
+            
+            # Insert default limits
+            db.rate_limits.insert_one(default_limits)
+        
+        # Get fresh data from Twitter
+        auth_data = db.get_twitter_auth(client_id)
+        if not auth_data:
+            raise Exception("No Twitter authentication found")
+        print("Twitter authentication found", auth_data)
+        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        bearer_token = decrypted_auth.get("bearer_token")
+        
+        if not bearer_token:
+            bearer_token = generate_bearer_token(
+                decrypted_auth.get("api_key"), 
+                decrypted_auth.get("api_secret_key")
+            )
+        
+        # Call Twitter API
+        headers = {
+            "Authorization": f"Bearer {bearer_token}"
+        }
+        
+        response = requests.get("https://api.twitter.com/2/usage/tweets", headers=headers)
+        
+        if response.status_code != 200:
+            # If we hit a rate limit, set the rate limit error state
+            if response.status_code == 429:
+                reset_time = None
+                try:
+                    reset_time = datetime.fromtimestamp(int(response.headers.get('x-rate-limit-reset', 0)), timezone.utc)
+                except:
+                    reset_time = now + timedelta(minutes=15)  # Default 15-minute wait if no reset time
+                
+                mark_rate_limit_error(client_id, reset_time)
+                return {
+                    "error": "Rate limit exceeded",
+                    "limits": cached_limits['rate_limits'] if cached_limits else default_limits['rate_limits'],
+                    "cached": True,
+                    "rate_limited": True,
+                    "rate_limit_reset": reset_time,
+                    "last_checked": now
+                }
+            raise Exception(f"Twitter API error: {response.text}")
+        
+        # Extract rate limits from response
+        api_data = response.json()
+        data = api_data.get("data", {})
+        rate_limits = {
+            "project_usage": int(data.get("project_usage", 0)),
+            "project_cap": int(data.get("project_cap", 100)),
+            "cap_reset_day": int(data.get("cap_reset_day", 0)),
+            "project_id": data.get("project_id", "0")
+        }
+        
+        # Update cache with timezone-aware datetime
+        cache_duration = timedelta(hours=2)
+        cached_until = now + cache_duration
+        
+        db.rate_limits.update_one(
+            {"client_id": client_id},
+            {
+                "$set": {
+                    "rate_limits": rate_limits,
+                    "last_checked": now,
+                    "cached_until": cached_until,
+                    "has_rate_limit_error": False,
+                    "rate_limit_reset": None
+                }
+            },
+            upsert=True
+        )
+        
+        return {
+            "limits": rate_limits,
+            "cached": False,
+            "last_checked": now,
+            "next_check": cached_until,
+            "rate_limited": False
+        }
+        
+    except Exception as e:
+        # For any other errors, return error state but don't mark as rate limited
+        return {
+            "error": str(e),
+            "limits": cached_limits['rate_limits'] if cached_limits else {
+                "project_usage": 0,
+                "project_cap": 100,
+                "cap_reset_day": 0,
+                "project_id": 0
+            },
+            "cached": True,
+            "rate_limited": False,
+            "last_checked": now
+        }
+
+def mark_rate_limit_error(client_id: str, reset_time: datetime) -> None:
+    """
+    Mark a client as rate limited in the cache
+    """
+    try:
+        db = get_db()
+        db.rate_limits.update_one(
+            {"client_id": client_id},
+            {
+                "$set": {
+                    "has_rate_limit_error": True,
+                    "rate_limit_reset": reset_time
+                }
+            }
+        )
+    except Exception as e:
+        print(f"Error marking rate limit: {str(e)}")
+
+@agent_bp.route('/twitter/limits/<client_id>', methods=['GET'])
+@require_auth
+def get_client_rate_limits(client_id):
+    """
+    Get Twitter rate limits for a client
+    Uses cached data if available and not expired (2 hours)
+    """
+    try:
+        result = get_twitter_rate_limits(client_id)
+        
+        response_data = {
+            "status": "success" if not result.get('error') else "error",
+            "data": {
+                "limits": result['limits'],
+                "cached": result['cached'],
+                "last_checked": result['last_checked'],
+                "rate_limited": result.get('rate_limited', False)
+            }
+        }
+        
+        # Add rate limit information if present
+        if result.get('rate_limited'):
+            response_data['data']['rate_limit_reset'] = result['rate_limit_reset']
+            response_data['message'] = result['error']
+        
+        # Add next check time if available
+        if result.get('next_check'):
+            response_data['data']['next_check'] = result['next_check']
+        
+        status_code = 429 if result.get('rate_limited') else 200
+        return jsonify(response_data), status_code
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to get rate limits: {str(e)}"
+        }), 500
+
+@agent_bp.route('/toggle/<client_id>', methods=['PUT'])
+@require_auth
+def toggle_agent_activation(client_id):
+    """Toggle agent activation status (is_active property)"""
+    try:
+        db = get_db()
+        config = db.get_agent_config(client_id)
+        
+        if not config:
+            return jsonify({
+                "status": "error",
+                "message": f"No agent configuration found for client ID: {client_id}"
+            }), 404
+        
+        # Check if agent is paid
+        if not config.get('is_paid', False):
+            return jsonify({
+                "status": "error",
+                "message": "Cannot activate unpaid agent. Please complete payment first."
+            }), 403
+        
+        # Toggle is_active status
+        new_status = not config.get('is_active', False)
+        
+        # Update the configuration
+        result = db.agent_config.update_one(
+            {"client_id": client_id},
+            {
+                "$set": {
+                    "is_active": new_status,
+                    "updated_at": datetime.now(timezone.utc)
+                }
+            }
+        )
+        
+        if result.modified_count == 0:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to update agent activation status"
+            }), 500
+        
+        return jsonify({
+           "success": True,
+            "message": f"Agent {'activated' if new_status else 'deactivated'} successfully",
+            "data": {
+                "is_active": new_status
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to toggle agent activation: {str(e)}"
+        }), 500
+
+# Also add a GET endpoint to check activation status
+@agent_bp.route('/status/<client_id>', methods=['GET'])
+@require_auth
+def get_agent_status(client_id):
+    """
+    Get agent activation and payment status
+    """
+    try:
+        db = get_db()
+        
+        # Get current agent configuration
+        config = db.get_agent_config(client_id)
+        
+        if not config:
+            return jsonify({
+                "status": "error",
+                "message": f"No agent configuration found for client ID: {client_id}"
+            }), 404
+        
+        return jsonify({
+            "status": "success",
+            "data": {
+                "client_id": client_id,
+                "is_active": config.get('is_active', False),
+                "is_paid": config.get('is_paid', False),
+                "last_updated": config.get('updated_at', '').isoformat() if config.get('updated_at') else None
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to get agent status: {str(e)}"
         }), 500
 
 
