@@ -29,7 +29,8 @@ class AgentConfig:
         is_paid: bool = False,
         payment_amount: float = 0.0,
         payment_date: Optional[datetime] = None,
-        payment_id: str = ""
+        payment_id: str = "",
+        approval_mode: str = "automatic"  # 'automatic' | 'manual'
     ):
         self.client_id = client_id
         self.user_id = user_id
@@ -61,6 +62,7 @@ class AgentConfig:
         self.payment_amount = payment_amount
         self.payment_date = payment_date
         self.payment_id = payment_id
+        self.approval_mode = approval_mode
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert the model to a dictionary for database storage"""
@@ -88,7 +90,8 @@ class AgentConfig:
             "is_paid": self.is_paid,
             "payment_amount": self.payment_amount,
             "payment_date": self.payment_date,
-            "payment_id": self.payment_id
+            "payment_id": self.payment_id,
+            "approval_mode": self.approval_mode
         }
     
     @classmethod
@@ -118,5 +121,6 @@ class AgentConfig:
             is_paid=data.get("is_paid", False),
             payment_amount=data.get("payment_amount", 0.0),
             payment_date=data.get("payment_date"),
-            payment_id=data.get("payment_id", "")
+            payment_id=data.get("payment_id", ""),
+            approval_mode=data.get("approval_mode", "automatic")
         ) 

@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 
 from app.utils.db import get_db
 from app.config.config import Config
+from app.utils.encryption import decrypt_dict_values,SENSITIVE_FIELDS
+
 
 # Create Blueprint
 twitter_bp = Blueprint('twitter', __name__, url_prefix='/twitter')
@@ -292,19 +294,21 @@ def post_tweet(client_id):
     try:
         # Get request data
         data = request.json
+   
         
-        if not data or 'text' not in data:
+        if not data or 'reply_content' not in data:
             return jsonify({
                 "status": "error",
                 "message": "Tweet text is required in the request body"
             }), 400
         
-        tweet_text = data['text']
+        tweet_text = data['reply_content']
+        tweet_id = data['tweet_id']
+
         
         # Get the user's auth data from database
         db = get_db()
         auth_data = db.get_twitter_auth(client_id)
-        
         if not auth_data:
             return jsonify({
                 "status": "error",
@@ -312,21 +316,35 @@ def post_tweet(client_id):
             }), 404
         
         # Initialize Tweepy client with the stored credentials
+
+        decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
         client = tweepy.Client(
-            consumer_key=auth_data["api_key"],
-            consumer_secret=auth_data["api_secret_key"],
-            access_token=auth_data["access_token"],
-            access_token_secret=auth_data["access_token_secret"]
+            consumer_key=decrypted_auth["api_key"],
+            consumer_secret=decrypted_auth["api_secret_key"],
+            access_token=decrypted_auth["access_token"],
+            access_token_secret=decrypted_auth["access_token_secret"]
         )
         
+       
         # Post the tweet
         try:
-            response = client.create_tweet(text=tweet_text)
-            tweet_id = response.data["id"]
+
+            if len(tweet_text) > 280:
+                return jsonify({
+                "status": "error",
+                "message": f"Tweet exceeds 280 character limit (current: {len(tweet_text)})"
+            }), 400
+
+            if tweet_id:
+                response = client.create_tweet(text=tweet_text,in_reply_to_tweet_id=tweet_id)
+            else:
+                response = client.create_tweet(text=tweet_text)
+            
+            new_tweet_id= response.data["id"]
             
             # Store the tweet in our database
             tweet_data = {
-                "tweet_id": str(tweet_id),
+                "tweet_id": str(new_tweet_id),
                 "user_id": auth_data["user_id"],
                 "text": tweet_text,
                 "created_at": datetime.now(timezone.utc),
@@ -339,8 +357,8 @@ def post_tweet(client_id):
             return jsonify({
                 "status": "success",
                 "message": "Tweet posted successfully",
-                "tweet_id": tweet_id,
-                "tweet_url": f"https://twitter.com/{auth_data['user_name']}/status/{tweet_id}"
+                "tweet_id": new_tweet_id,
+                "reply_content": tweet_text
             })
             
         except Exception as tweet_error:

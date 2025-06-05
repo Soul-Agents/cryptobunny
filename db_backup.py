@@ -25,7 +25,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 class TweetDB:
     def __init__(self):
         # Change update threshold to 2 hours
-        self.update_threshold = timedelta(hours=6)
+        self.update_threshold = timedelta(minutes=10)
 
         # Try to get the public MongoDB URL first
         mongodb_uri = os.getenv("MONGODB_URL")  # Try MONGODB_URL first
@@ -66,7 +66,7 @@ class TweetDB:
             self.written_ai_tweets = self.db.written_ai_tweets
             self.written_ai_tweets_replies = self.db.written_ai_tweets_replies
             self.ai_mention_tweets = self.db.ai_mention_tweets
-            self.reply_proposals = self.db.reply_proposals
+            
             # Add new collections for Twitter auth and agent configuration
             self.twitter_auth = self.db.twitter_auth
             self.agent_config = self.db.agent_config
@@ -100,25 +100,6 @@ class TweetDB:
                 f"[DB] Connection string used: {mongodb_uri[:20]}..."
             )  # Show partial URI
             raise
-
-    def add_reply_proposal(self, client_id: str, user_id: str, tweet_id: str, tweet_text: str, proposed_reply: str) -> Dict:
-        """
-        Add a reply proposal to the database
-        """
-        try:
-            self.reply_proposals.insert_one({
-                "client_id": client_id, 
-                "user_id": user_id,
-                "tweet_id": tweet_id,
-                "tweet_text": tweet_text,
-                "proposed_reply": proposed_reply,
-                "status": "pending",
-                "created_at": datetime.now(timezone.utc),   
-            })
-            return {"status": "Success"}
-        except Exception as e:
-            print(f"[DB] Error adding reply proposal: {e}")
-            return {"status": "Error", "message": str(e)}
 
     def get_last_written_ai_tweets(
         self, user_id: str, limit: int = 21
@@ -600,7 +581,7 @@ class TweetDB:
                     }
                 )
                 .sort("created_at", -1)
-                .limit(10)
+                .limit(100)
             )
             return list(unreplied_tweets)
         except Exception as e:

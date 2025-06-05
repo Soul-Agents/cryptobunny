@@ -39,7 +39,8 @@ DEFAULT_AGENT_CONFIG = {
         'presence_penalty': 0.6,
         'frequency_penalty': 0.6,
     },
-    'is_active': False
+    'is_active': False,
+    'approval_mode': 'automatic'  # 'automatic' | 'manual'
 }
 
 def get_api_limit(bearer_token): 
@@ -270,15 +271,15 @@ def delete_agent_config(client_id):
 
 
 @agent_bp.route('/run/<client_id>', methods=['POST'])
-@require_auth
-def run_client_agent(client_id):
+# @require_auth
+async def run_client_agent(client_id):
     """
     Run a client's agent with a specific prompt or action
     """
     try:
         # Get the request data
         data = request.json
-        
+        print(data)
         if not data:
             return jsonify({
                 "status": "error",
@@ -289,6 +290,14 @@ def run_client_agent(client_id):
         action = data.get('action', 'default')
         question = data.get('question')
         
+        # Validate request data
+        if not data:
+            return jsonify({
+                "status": "error", 
+                "message": "No data provided"
+            }), 400
+
+ 
         if not question and action == 'custom':
             return jsonify({
                 "status": "error",
@@ -297,18 +306,19 @@ def run_client_agent(client_id):
         
         # Get the client's agent configuration
         db = get_db()
-        configs = db.get_agent_config(client_id)
-        
-        if not configs or len(configs) == 0:
+        config = db.get_agent_config(client_id)
+     
+    
+        if not config:
             return jsonify({
                 "status": "error",
                 "message": f"No agent configuration found for client ID: {client_id}"
             }), 404
         
-        # Get the first (and presumably only) configuration
-        agent_config = configs[0]
+        #
+        agent_config = config
         agent_name = agent_config.get("agent_name", "default")
-        
+        # print(agent_config)
         # Use the session ID for memory persistence
         session_id = f"{client_id}_{agent_name}"
         
@@ -329,15 +339,16 @@ def run_client_agent(client_id):
             main.set_global_agent_variables(agent_config)
             
             # Check if LLM is available
-            if not main.llm:
-                return jsonify({
-                    "status": "error",
-                    "message": "Language model not available. Please check your API key configuration."
-                }), 500
+            # if not main.llm:
+            #     return jsonify({
+            #         "status": "error",
+            #         "message": "Language model not available. Please check your API key configuration."
+            #     }), 500
             
             # Execute the agent
-            result = main.run_crypto_agent(question, session_id)
-            
+            result = main.run_crypto_agent(agent_config)
+            # result = db.get_unreplied_tweets(agent_config.get("user_id"))
+            print(result)
             return jsonify({
                 "status": "success",
                 "message": "Agent executed successfully",
@@ -1203,6 +1214,327 @@ def get_agent_status(client_id):
         return jsonify({
             "status": "error",
             "message": f"Failed to get agent status: {str(e)}"
+        }), 500
+
+# @agent_bp.route('/send-tg-message', methods=['POST'])
+# @require_auth
+# def send_tg_message():
+#     """
+#     Send a message to a Telegram channel
+#     """
+#     try:
+#         db = get_db()
+#         data = request.json
+#         message = data.get('message')
+#         channel_id = data.get('channel_id')
+#         if not message or not channel_id:
+#             return jsonify({
+#                 "status": "error",
+#                 "message": "Message and channel ID are required"
+#             }), 400
+        
+#         # Send message to Telegram channel
+#         # bot = Bot(token=os.getenv('TELEGRAM_BOT_TOKEN'))
+
+#         bot_builder = (
+#     Application.builder()
+#     .token(TELEGRAM_BOT_TOKEN)
+#     .updater(None)
+#     .build()
+# )
+        
+#         bot.send_message(chat_id=channel_id, text=message)
+
+#         return jsonify({
+#             "status": "success",
+#             "message": "Message sent successfully"
+#         })
+        
+#     except Exception as e:
+
+
+@agent_bp.route('/pending-replies/<client_id>', methods=['GET'])
+@require_auth
+def get_pending_replies(client_id):
+    """
+    Get pending replies for a client that need approval
+    """
+    try:
+        # Get query parameters
+        status = request.args.get('status', 'pending')
+        
+        db = get_db()
+        
+        # Check if agent config exists for this client
+        config = db.get_agent_config(client_id)
+        if not config:
+            return jsonify({
+                "status": "error",
+                "message": f"No agent configuration found for client ID: {client_id}"
+            }), 404
+        
+        # Get pending replies
+        pending_replies = db.get_pending_replies(client_id, status)
+        
+        # Convert to JSON-serializable format
+        replies_json = json.loads(json.dumps(pending_replies, default=str))
+        
+        return jsonify({
+            "status": "success",
+            "data": replies_json,
+            "count": len(pending_replies)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to get pending replies: {str(e)}"
+        }), 500
+
+@agent_bp.route('/approve-reply/<reply_id>', methods=['PUT'])
+@require_auth
+def approve_reply(reply_id):
+    """
+    Approve a pending reply
+    """
+    try:
+        db = get_db()
+        
+        # Get the reply data
+        reply_data = db.get_reply_by_id(reply_id)
+        if not reply_data:
+            return jsonify({
+                "status": "error",
+                "message": "Reply not found"
+            }), 404
+        
+        # Check if it's still pending
+        if reply_data.get("status") != "pending":
+            return jsonify({
+                "status": "error",
+                "message": f"Reply is not pending (current status: {reply_data.get('status')})"
+            }), 400
+        
+        # Update status to approved
+        result = db.update_reply_status(reply_id, "approved")
+        
+        if result["status"] == "success":
+            return jsonify({
+                "status": "success",
+                "message": "Reply approved successfully",
+                "reply_id": reply_id
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": result["message"]
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to approve reply: {str(e)}"
+        }), 500
+
+@agent_bp.route('/reject-reply/<reply_id>', methods=['PUT'])
+@require_auth
+def reject_reply(reply_id):
+    """
+    Reject a pending reply
+    """
+    try:
+        db = get_db()
+        
+        # Get the reply data
+        reply_data = db.get_reply_by_id(reply_id)
+        if not reply_data:
+            return jsonify({
+                "status": "error",
+                "message": "Reply not found"
+            }), 404
+        
+        # Check if it's still pending
+        if reply_data.get("status") != "pending":
+            return jsonify({
+                "status": "error",
+                "message": f"Reply is not pending (current status: {reply_data.get('status')})"
+            }), 400
+        
+        # Update status to rejected
+        result = db.update_reply_status(reply_id, "rejected")
+        
+        if result["status"] == "success":
+            return jsonify({
+                "status": "success",
+                "message": "Reply rejected successfully",
+                "reply_id": reply_id
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": result["message"]
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to reject reply: {str(e)}"
+        }), 500
+
+@agent_bp.route('/post-approved-reply/<reply_id>', methods=['POST'])
+@require_auth
+def post_approved_reply(reply_id):
+    """
+    Post an approved reply to Twitter
+    """
+    try:
+        db = get_db()
+        
+        # Get the reply data
+        reply_data = db.get_reply_by_id(reply_id)
+        if not reply_data:
+            return jsonify({
+                "status": "error",
+                "message": "Reply not found"
+            }), 404
+        
+        # Check if it's approved
+        if reply_data.get("status") != "approved":
+            return jsonify({
+                "status": "error",
+                "message": f"Reply is not approved (current status: {reply_data.get('status')})"
+            }), 400
+        
+        # Get client configuration and initialize Twitter client
+        client_id = reply_data.get("client_id")
+        config = db.get_agent_config(client_id)
+        if not config:
+            return jsonify({
+                "status": "error",
+                "message": f"No agent configuration found for client ID: {client_id}"
+            }), 404
+        
+        # Initialize Twitter client
+        if not main.TwitterClient.initialize(client_id):
+            return jsonify({
+                "status": "error",
+                "message": "Failed to initialize Twitter client"
+            }), 500
+        
+        # Set global variables for this agent
+        main.set_global_agent_variables(config)
+        
+        # Post the reply
+        tweet_id = reply_data.get("original_tweet_id")
+        tweet_text = reply_data.get("original_tweet_text", "")
+        message = reply_data.get("proposed_reply")
+        
+        # Use the existing answer tool to post the reply
+        result = main.answer_tool._run(tweet_id, tweet_text, message)
+        
+        if "error" not in result:
+            # Mark as posted in database
+            posted_tweet_id = result.get("data", {}).get("tweet_id")
+            if posted_tweet_id:
+                db.mark_reply_as_posted(reply_id, posted_tweet_id)
+            
+            return jsonify({
+                "status": "success",
+                "message": "Reply posted successfully",
+                "reply_id": reply_id,
+                "posted_tweet_id": posted_tweet_id
+            })
+        else:
+            return jsonify({
+                "status": "error",
+                "message": f"Failed to post reply: {result.get('error', 'Unknown error')}"
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to post approved reply: {str(e)}"
+        }), 500
+
+@agent_bp.route('/process-approved-replies/<client_id>', methods=['POST'])
+@require_auth
+def process_approved_replies(client_id):
+    """
+    Process all approved replies for a client (post them to Twitter)
+    """
+    try:
+        db = get_db()
+        
+        # Get all approved replies for this client
+        approved_replies = db.get_pending_replies(client_id, "approved")
+        
+        if not approved_replies:
+            return jsonify({
+                "status": "success",
+                "message": "No approved replies to process",
+                "processed_count": 0
+            })
+        
+        # Get client configuration and initialize Twitter client
+        config = db.get_agent_config(client_id)
+        if not config:
+            return jsonify({
+                "status": "error",
+                "message": f"No agent configuration found for client ID: {client_id}"
+            }), 404
+        
+        # Initialize Twitter client
+        if not main.TwitterClient.initialize(client_id):
+            return jsonify({
+                "status": "error",
+                "message": "Failed to initialize Twitter client"
+            }), 500
+        
+        # Set global variables for this agent
+        main.set_global_agent_variables(config)
+        
+        processed_count = 0
+        errors = []
+        
+        for reply_data in approved_replies:
+            try:
+                reply_id = str(reply_data["_id"])
+                tweet_id = reply_data.get("original_tweet_id")
+                tweet_text = reply_data.get("original_tweet_text", "")
+                message = reply_data.get("proposed_reply")
+                
+                # Post the reply
+                result = main.answer_tool._run(tweet_id, tweet_text, message)
+                
+                if "error" not in result:
+                    # Mark as posted in database
+                    posted_tweet_id = result.get("data", {}).get("tweet_id")
+                    if posted_tweet_id:
+                        db.mark_reply_as_posted(reply_id, posted_tweet_id)
+                        processed_count += 1
+                else:
+                    errors.append(f"Reply {reply_id}: {result.get('error', 'Unknown error')}")
+                    
+            except Exception as e:
+                errors.append(f"Reply {reply_id}: {str(e)}")
+        
+        response_data = {
+            "status": "success",
+            "message": f"Processed {processed_count} approved replies",
+            "processed_count": processed_count,
+            "total_approved": len(approved_replies)
+        }
+        
+        if errors:
+            response_data["errors"] = errors
+            response_data["error_count"] = len(errors)
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to process approved replies: {str(e)}"
         }), 500
 
 

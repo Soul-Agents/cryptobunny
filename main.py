@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from schemas import Tweet, WrittenAITweet, WrittenAITweetReply, PublicMetrics, AgentConfig, TwitterAuth
 import random
 from openai import OpenAI
+import requests
+
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from typing import List, Optional, Any, Dict
@@ -53,8 +55,8 @@ if not API_KEY_OPENAI:
         print("WARNING: Neither API_KEY_OPENAI nor OPENAI_API_KEY environment variables are set")
 
 # Default agent values (will be overridden by database settings)
-USER_ID = os.getenv("DEFAULT_USER_ID", "")
-USER_NAME = os.getenv("DEFAULT_USER_NAME", "")
+USER_ID = ""
+USER_NAME = ""
 USER_PERSONALITY = ""
 STYLE_RULES = ""
 CONTENT_RESTRICTIONS = ""
@@ -71,6 +73,10 @@ TRADERS_AND_ANALYSTS = []
 KNOWLEDGE_BASE = ""
 FAMOUS_ACCOUNTS = []
 EXAMPLE_TWEETS = []
+
+# Global variable to track current agent configuration
+CURRENT_AGENT_CONFIG = None
+
 # endregion
 
 
@@ -151,15 +157,14 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
             return None
         
         # Initialize Twitter client with user credentials
-        TwitterClient.initialize(config.get("user_id"))
+        TwitterClient.initialize(config.get("client_id"))
         
         # Combine the configuration into a single dictionary
         agent_config = {
             # Agent identity
-            "USER_ID": config.get("user_id", ""),
+            "USER_ID": config.get("client_id", ""),
             "USER_NAME": config.get("user_name", ""),
             "USER_PERSONALITY": config.get("user_personality", ""),
-            
             # Communication style
             "STYLE_RULES": config.get("style_rules", ""),
             "CONTENT_RESTRICTIONS": config.get("content_restrictions", ""),
@@ -185,6 +190,9 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
             
             # Model configuration
             "MODEL_CONFIG": config.get("model_config", {}),
+            
+            # Approval mode
+            "approval_mode": config.get("approval_mode", "automatic"),
             
             # Metadata
             "CLIENT_ID": client_id,
@@ -636,8 +644,7 @@ class ReadTweetsTool(BaseTweetTool):
                     print("Using recent tweets from database")
                     return current_tweets
                 try:
-                    since_id = db.get_most_recent_tweet_id(USER_ID)
-                    print(f"Fetching new tweets since ID: {since_id}")
+                    
 
                     response = self.api.get_home_timeline(
                         tweet_fields=[
@@ -654,7 +661,7 @@ class ReadTweetsTool(BaseTweetTool):
                             "author_id",
                         ],
                         user_fields=["username", "name"],
-                        max_results=20,
+                        max_results=3,
                     )
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
@@ -1139,17 +1146,30 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
             if db.is_tweet_replied(USER_ID, tweet_id):
                 return "Already replied to this tweet"
 
-            # Send the reply
-            result = answer_tool._run(tweet_id, tweet_text, message)
+            # Check approval mode from current agent configuration
+            # approval_mode = CURRENT_AGENT_CONFIG.get("approval_mode", "automatic") if CURRENT_AGENT_CONFIG else "automatic"
+            approval_mode = "manual"
+            
+            if approval_mode == "manual":
+                # Store for manual approval instead of posting immediately
+                client_id = CURRENT_AGENT_CONFIG.get("client_id") if CURRENT_AGENT_CONFIG else None
+                if not client_id:
+                    return "ERROR: Cannot store reply proposal - no client ID available"
+                
+                
+                return notify_telegram(client_id, tweet_id, tweet_text, message)
+            else:
+                # Automatic mode - post immediately (existing behavior)
+                result = answer_tool._run(tweet_id, tweet_text, message)
 
-            # Update mention status if successful
-            if "error" not in result:
-                if is_mention:
-                    db.add_replied_mention(tweet_id, USER_ID)
-                else:
-                    db.add_replied_tweet(USER_ID, tweet_id)
+                # Update mention status if successful
+                if "error" not in result:
+                    if is_mention:
+                        db.add_replied_mention(tweet_id, USER_ID)
+                    else:
+                        db.add_replied_tweet(USER_ID, tweet_id)
 
-            return result.get("message", result.get("error", "Failed to send reply"))
+                return result.get("message", result.get("error", "Failed to send reply"))
 
     except Exception as e:
         print(f"Reply error: {str(e)}")
@@ -1452,155 +1472,9 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Critical Error: {str(e)}")
 
-# # region Agent Configuration
-# current_date = datetime.now().strftime("%B %Y")
 
 
-# prompt = ChatPromptTemplate.from_messages(
-#     [
-#         (
-#             "system",
-#             f"""
-#             You are {USER_NAME}.
-#             Core Identity: {USER_PERSONALITY}
-#             Timestamp: {current_date}
 
-#             ABSOLUTE RESTRICTIONS:
-#             - Never interact with {USER_ID}
-#             - Never interact with {USER_NAME}
-#             - Never interact with your retweets
-#             Exception: Only reply to @{USER_NAME} mentions if tagged
-
-#             {STYLE_RULES}
-
-#             SINGLE ACTION PROTOCOL:
-#             1. OBSERVE (ONE only):
-#             → read_timeline
-#             → read_mentions (avoid)
-                
-#             2. EXECUTE ONE ACTION AND STOP:
-#             → tweet_tool_wrapped
-#             OR
-#             → answer_tool_wrapped
-#             STOP
-            
-#             3. END PROTOCOL:
-#             → END aka STOP
-
-#             DISABLED ACTIONS (DO NOT USE):
-#             → like
-#             → follow
-#             → search_context
-#             → browse_internet
-#             → search_twitter
-            
-#             Use KNOWLEDGE_BASE for context: {KNOWLEDGE_BASE}
-
-#             CRITICAL: Execute ONE action only. Then TERMINATE immediately.
-#             No additional responses. No suggestions. No continuations.
-#             """,
-#         ),
-#         ("placeholder", "{chat_history}"),
-#         ("human", "{input}"),
-#         ("placeholder", "{agent_scratchpad}"),
-#     ]
-# )
-
-# agent = create_tool_calling_agent(llm, tools, prompt)
-
-
-# # region Memory Configuration
-# def get_memory(session_id: str = "default") -> ChatMessageHistory:
-#     """Initialize or retrieve chat memory for the given session"""
-#     return ChatMessageHistory(session_id=session_id)
-
-
-# # Create memory instance
-# memory = ConversationBufferMemory(
-#     memory_key="chat_history", return_messages=True, output_key="output"
-# )
-
-# # Modify the agent executor creation (replace existing agent_executor definition)
-# agent_executor = AgentExecutor(
-#     agent=agent,
-#     tools=tools,
-#     verbose=True,
-#     handle_parsing_errors=True,
-#     max_iterations=10,
-#     memory=memory,  # Add memory here
-# )
-
-# # Wrap the agent executor with message history
-# agent_with_chat_history = RunnableWithMessageHistory(
-#     agent_executor,
-#     get_memory,
-#     input_messages_key="input",
-#     history_messages_key="chat_history",
-# )
-
-
-# # Modify the run_crypto_agent function
-# def run_crypto_agent(agent_config: AgentConfig):
-#     try:
-#         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-#         client_id = agent_config.get("client_id")
-        
-#         # Load config and initialize Twitter client
-#         config = load_agent_config(client_id)
-#         if not config:
-#             return {"error": "Failed to load agent configuration"}
-            
-#         # Initialize Twitter client
-#         if not TwitterClient.initialize(config.get("USER_ID")):
-#             return {"error": "Failed to initialize Twitter client"}
-        
-#         # Now proceed with agent execution
-#         response = agent_with_chat_history.invoke(
-#             {"input": agent_config.get("QUESTION",  """
-#         SINGLE ACTION:
-#         1. Read timeline for relevant posts
-#         2. If found → Answer ONCE and STOP IMMEDIATELY
-#         3. If not found → STOP IMMEDIATELY
-#         4. If already replied → STOP IMMEDIATELY
-
-#         DO NOT:
-#         - Continue reading timeline after answering
-#         - Reply to multiple tweets
-#         - Reply to own tweets
-
-#         END PROTOCOL:
-#         → STOP
-#         """,)},
-#             config={"configurable": {"session_id": session_id}}
-#         )
-
-#         if "Already replied to this mention" in str(response):
-#             return agent_with_chat_history.invoke(
-#                 {
-#                     "input": "Previous mention was already replied to. Please choose a different action (tweet or reply to a different tweet)."
-#                 },
-#                 config={"configurable": {"session_id": session_id}},
-#             )
-
-#         if isinstance(response, dict) and "output" in response:
-#             return response["output"]
-#         return response
-
-#     except Exception as e:
-#         print(f"Error in agent execution: {str(e)}")
-#         return {"error": str(e)}
-
-
-# # Modify the main execution block
-# if __name__ == "__main__":
-#     try:
-#         session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-#         print(QUESTION, "QUESTION")
-#         question = random.choice(QUESTION)
-#         response = run_crypto_agent(question, session_id)
-#         print(response)
-#     except Exception as e:
-#         print(f"Error: {str(e)}")
 
 # # Function to set global agent variables from config
 def set_global_agent_variables(config: Dict[str, Any]) -> None:
@@ -1610,37 +1484,43 @@ def set_global_agent_variables(config: Dict[str, Any]) -> None:
     Args:
         config (Dict[str, Any]): The agent configuration
     """
-    global USER_ID, USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS
+    global USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS, CLIENT_ID
     global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
     global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
-    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm
+    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm, CURRENT_AGENT_CONFIG
     
     # Validate that config is not None
     if not config:
         print("Error: Cannot set global variables - configuration is empty")
         return
     
+    # Set the current agent configuration for approval mode checking
+    CURRENT_AGENT_CONFIG = config
+    print(config, "CONFIG")
+    print(config.get("client_id"), "CLIENT_ID")
     # Set global variables from config with fallbacks to current values
-    USER_ID = config.get("USER_ID", USER_ID)
-    USER_NAME = config.get("USER_NAME", USER_NAME)
-    USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
-    STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
-    CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
-    STRATEGY = config.get("STRATEGY", STRATEGY)
-    REMEMBER = config.get("REMEMBER", REMEMBER)
-    MISSION = config.get("MISSION", MISSION)
-    QUESTION = config.get("QUESTION", QUESTION)
-    ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
+    CLIENT_ID = config.get("client_id", "")
+    USER_NAME = config.get("user_name", USER_NAME)
+    USER_PERSONALITY = config.get("user_personality", USER_PERSONALITY)
+    STYLE_RULES = config.get("style_rules", STYLE_RULES)
+    CONTENT_RESTRICTIONS = config.get("content_restrictions", CONTENT_RESTRICTIONS)
+    STRATEGY = config.get("strategy", STRATEGY)
+    REMEMBER = config.get("remember", REMEMBER)
+    MISSION = config.get("mission", MISSION)
+    QUESTION = config.get("question", QUESTION)
+    ENGAGEMENT_STRATEGY = config.get("engagement_strategy", ENGAGEMENT_STRATEGY)
     
     # Ensure list values are actually lists
-    AI_AND_AGENTS = config.get("AI_AND_AGENTS", AI_AND_AGENTS) or []
-    WEB3_BUILDERS = config.get("WEB3_BUILDERS", WEB3_BUILDERS) or []
-    DEFI_EXPERTS = config.get("DEFI_EXPERTS", DEFI_EXPERTS) or []
-    THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
-    TRADERS_AND_ANALYSTS = config.get("TRADERS_AND_ANALYSTS", TRADERS_AND_ANALYSTS) or []
-    FAMOUS_ACCOUNTS = config.get("FAMOUS_ACCOUNTS", FAMOUS_ACCOUNTS) or []
-    KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
+    AI_AND_AGENTS = config.get("ai_and_agents", AI_AND_AGENTS) or []
+    WEB3_BUILDERS = config.get("web3_builders", WEB3_BUILDERS) or []
+    DEFI_EXPERTS = config.get("defi_experts", DEFI_EXPERTS) or []
+    THOUGHT_LEADERS = config.get("thought_leaders", THOUGHT_LEADERS) or []
+    TRADERS_AND_ANALYSTS = config.get("traders_and_analysts", TRADERS_AND_ANALYSTS) or []
+    FAMOUS_ACCOUNTS = config.get("famous_accounts", FAMOUS_ACCOUNTS) or []
+    KNOWLEDGE_BASE = config.get("knowledge_base", KNOWLEDGE_BASE)
     
+
+    print(CLIENT_ID, "CLIENT_ID")
 
     
     # Update model config and reinitialize LLM if provided
@@ -1661,3 +1541,38 @@ def set_global_agent_variables(config: Dict[str, Any]) -> None:
             print("Continuing with current LLM")
     
    
+
+def get_username_from_author_id(author_id: str) -> str:
+    """
+    Get username from author_id using the Twitter API
+    
+    Args:
+        author_id: Twitter user ID
+        
+    Returns:
+        str: Username or fallback to author_id if lookup fails
+    """
+    try:
+        client = TwitterClient.get_client()
+        if not client:
+            print("Twitter client not available for username lookup")
+            return author_id
+        
+        user = client.get_user(id=author_id, user_fields=["username"])
+        if user and user.data:
+            return user.data.username
+        else:
+            print(f"User not found for author_id: {author_id}")
+            return author_id
+            
+    except Exception as e:
+        print(f"Error looking up username for author_id {author_id}: {e}")
+        return author_id
+
+
+
+                
+    except Exception as e:
+        print(f"Error storing reply proposal: {e}")
+        return f"Error storing reply proposal: {str(e)}"
+
