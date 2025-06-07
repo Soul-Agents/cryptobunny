@@ -59,7 +59,8 @@ class ReplyToAITweet(TypedDict):
 class TwitterAuth(TypedDict):
     client_id: str  # Unique identifier for the client
     user_id: str  # Twitter user ID
-    user_name: str  # Twitter username
+    user_name: str  # Twitter username of owner account
+    agent_name: str  # Twitter account name of agent
     api_key: str
     api_secret_key: str
     bearer_token: str

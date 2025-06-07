@@ -1146,30 +1146,17 @@ def reply_to_tweet_tool(tweet_id: str, tweet_text: str, message: str) -> str:
             if db.is_tweet_replied(USER_ID, tweet_id):
                 return "Already replied to this tweet"
 
-            # Check approval mode from current agent configuration
-            # approval_mode = CURRENT_AGENT_CONFIG.get("approval_mode", "automatic") if CURRENT_AGENT_CONFIG else "automatic"
-            approval_mode = "manual"
-            
-            if approval_mode == "manual":
-                # Store for manual approval instead of posting immediately
-                client_id = CURRENT_AGENT_CONFIG.get("client_id") if CURRENT_AGENT_CONFIG else None
-                if not client_id:
-                    return "ERROR: Cannot store reply proposal - no client ID available"
-                
-                
-                return notify_telegram(client_id, tweet_id, tweet_text, message)
-            else:
-                # Automatic mode - post immediately (existing behavior)
-                result = answer_tool._run(tweet_id, tweet_text, message)
+            # Send the reply
+            result = answer_tool._run(tweet_id, tweet_text, message)
 
-                # Update mention status if successful
-                if "error" not in result:
-                    if is_mention:
-                        db.add_replied_mention(tweet_id, USER_ID)
-                    else:
-                        db.add_replied_tweet(USER_ID, tweet_id)
+            # Update mention status if successful
+            if "error" not in result:
+                if is_mention:
+                    db.add_replied_mention(tweet_id, USER_ID)
+                else:
+                    db.add_replied_tweet(USER_ID, tweet_id)
 
-                return result.get("message", result.get("error", "Failed to send reply"))
+            return result.get("message", result.get("error", "Failed to send reply"))
 
     except Exception as e:
         print(f"Reply error: {str(e)}")

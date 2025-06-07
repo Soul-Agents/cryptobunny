@@ -640,6 +640,7 @@ def process_agent_payment(client_id):
                 "payment_id": payment_id,
                 "updated_at": datetime.now(timezone.utc),
                 "tx_hash": tx_hash,
+                "is_all_setup": True,
                 # Also activate the agent since it's now paid
                 "is_active": True
             }}
@@ -723,8 +724,10 @@ def get_agent_payment_status(client_id):
             "payment_date": config.get("payment_date"),
             "payment_id": config.get("payment_id", ""),
             "is_active": config.get("is_active", False),
-            "tx_hash": config.get("tx_hash", "")
+            "tx_hash": config.get("tx_hash", ""),
+            "is_all_setup": config.get("is_all_setup", False)
         }
+   
         
         # Convert datetime to string for JSON serialization
         payment_info_json = json.loads(json.dumps(payment_info, default=str))

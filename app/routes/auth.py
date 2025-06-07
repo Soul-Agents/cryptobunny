@@ -305,12 +305,7 @@ def connect_twitter_account():
             "auth_url": auth_url,
             "client_id": client_id,
             "redirect_url": redirect_url,
-            "instructions": {
-                "step1": "Redirect user to the auth_url (window.location.href or window.open)",
-                "step2": "Twitter will handle the authentication and redirect to our backend",
-                "step3": "Our backend will process the callback and redirect to your redirect_url",
-                "step4": "Check authentication status using /twitter-callback-status?client_id=YOUR_CLIENT_ID"
-            }
+           
         })
     
     except Exception as e:
@@ -394,7 +389,8 @@ def twitter_callback():
         auth_data = {
             "client_id": client_id,
             "user_id": user.data.id,
-            "username": user.data.username,
+            "agent_name": user.data.username,
+            
             "api_key": API_KEY,
             "api_secret_key": API_SECRET,
             "bearer_token": "",

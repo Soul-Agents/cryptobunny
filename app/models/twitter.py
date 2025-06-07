@@ -8,7 +8,7 @@ class TwitterAuth:
         self,
         client_id: str,
         user_id: str,
-        username: str,
+        agent_name:str,
         api_key: str,
         api_secret_key: str,
         access_token: str,
@@ -16,11 +16,13 @@ class TwitterAuth:
         bearer_token: str = "",
         has_agent_config: bool = False,
         created_at: Optional[datetime] = None,
-        updated_at: Optional[datetime] = None
+        updated_at: Optional[datetime] = None,
+        username: Optional[str] = None
     ):
         self.client_id = client_id
         self.user_id = user_id
         self.username = username
+        self.agent_name = agent_name
         self.api_key = api_key
         self.api_secret_key = api_secret_key
         self.bearer_token = bearer_token
@@ -36,6 +38,7 @@ class TwitterAuth:
             "client_id": self.client_id,
             "user_id": self.user_id,
             "username": self.username,
+            "agent_name": self.agent_name,
             "api_key": self.api_key,
             "api_secret_key": self.api_secret_key,
             "bearer_token": self.bearer_token,
@@ -53,6 +56,7 @@ class TwitterAuth:
             client_id=data.get("client_id"),
             user_id=data.get("user_id"),
             username=data.get("username"),
+            agent_name=data.get("agent_name"),
             api_key=data.get("api_key"),
             api_secret_key=data.get("api_secret_key"),
             bearer_token=data.get("bearer_token", ""),
@@ -69,6 +73,7 @@ class TwitterAuth:
             "client_id": self.client_id,
             "user_id": self.user_id,
             "username": self.username,
+            "agent_name": self.agent_name,
             "has_agent_config": self.has_agent_config,
             "created_at": self.created_at,
             "updated_at": self.updated_at
