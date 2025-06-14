@@ -84,11 +84,8 @@ class AgentConfig(TypedDict):
     mission: str
     questions: List[str]
     engagement_strategy: str
-    ai_and_agents: List[str]
-    web3_builders: List[str]
-    defi_experts: List[str]
     thought_leaders: List[str]
-    traders_and_analysts: List[str]
+    accounts_to_follow: List[str]
     knowledge_base: str
     model_config: Dict[str, Any]
     created_at: datetime

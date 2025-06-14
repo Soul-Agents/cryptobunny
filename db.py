@@ -70,6 +70,7 @@ class TweetDB:
             # Add new collections for Twitter auth and agent configuration
             self.twitter_auth = self.db.twitter_auth
             self.agent_config = self.db.agent_config
+            self.api_limits = self.db.api_limits
 
             # Create index
             self.tweets.create_index("tweet_id", unique=True)
@@ -100,7 +101,11 @@ class TweetDB:
                 f"[DB] Connection string used: {mongodb_uri[:20]}..."
             )  # Show partial URI
             raise
-
+        
+    def get_api_limits(self, client_id: str) -> Dict:
+        """Get the API limits for a client"""
+        return self.api_limits.find_one({"client_id": client_id})
+    
     def add_reply_proposal(self, client_id: str, user_id: str, tweet_id: str, tweet_text: str, proposed_reply: str) -> Dict:
         """
         Add a reply proposal to the database
@@ -147,7 +152,12 @@ class TweetDB:
         except Exception as e:
             print(f"Error fetching last written AI tweet replies: {e}")
             return []
+        
 
+    def check_if_tweet_replied_by_agent(self, user_id: str, tweet_id: str) -> bool:
+        """Check if a tweet has been replied to by the agent"""
+        return self.written_ai_tweets_replies.find_one({"user_id": user_id, "tweet_id": tweet_id}) is not None
+    
     def add_written_ai_tweet_reply(
         self, user_id: str, original_tweet_id: str, reply: str
     ) -> Dict:
@@ -600,7 +610,7 @@ class TweetDB:
                     }
                 )
                 .sort("created_at", -1)
-                .limit(10)
+                .limit(20)
             )
             return list(unreplied_tweets)
         except Exception as e:

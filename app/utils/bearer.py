@@ -1,6 +1,7 @@
 import requests
 import base64
-
+from app.utils.db import get_db
+from app.utils.encryption import encrypt_dict_values
 def generate_bearer_token(api_key, api_secret):
     # 1. Encode credentials
     key_secret = f"{api_key}:{api_secret}".encode('ascii')
@@ -31,3 +32,14 @@ def generate_bearer_token(api_key, api_secret):
         print("Error:", response.status_code, response.text)
         return None
     
+
+
+def save_bearer_token(bearer_token, client_id):
+    db = get_db()
+    encrypted = encrypt_dict_values({"bearer_token": bearer_token}, ["bearer_token"])
+    encrypted_bearer_token = encrypted["bearer_token"]
+    db.twitter_auth.update_one(
+        {"client_id": client_id},
+        {"$set": {"bearer_token": encrypted_bearer_token}}
+    )
+    return encrypted_bearer_token

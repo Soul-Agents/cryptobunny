@@ -15,4 +15,3 @@ uuid==1.30
 gunicorn==21.2.0
 cryptography==44.0.3
 pyjwt==2.10.1
-

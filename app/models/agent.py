@@ -17,14 +17,14 @@ class AgentConfig:
         mission: str = "",
         questions: List[str] = None,
         engagement_strategy: str = "",
-        ai_and_agents: List[str] = None,
-        web3_builders: List[str] = None,
-        defi_experts: List[str] = None,
         knowledge_base: str = "",
+        accounts_to_follow: List[str] = None,
+        thought_leaders: List[str] = None,
         model_config: Dict[str, Any] = None,
         created_at: Optional[datetime] = None,
         updated_at: Optional[datetime] = None,
         is_active: bool = True,
+        example_tweets: List[str] = None,
         # Payment related fields
         is_paid: bool = False,
         payment_amount: float = 0.0,
@@ -43,9 +43,8 @@ class AgentConfig:
         self.mission = mission
         self.questions = questions or []
         self.engagement_strategy = engagement_strategy
-        self.ai_and_agents = ai_and_agents or []
-        self.web3_builders = web3_builders or []
-        self.defi_experts = defi_experts or []
+        self.accounts_to_follow = accounts_to_follow or []
+        self.thought_leaders = thought_leaders or []
         self.knowledge_base = knowledge_base
         self.model_config = model_config or {
             "type": "gpt-4",
@@ -57,6 +56,7 @@ class AgentConfig:
         self.created_at = created_at or datetime.now(timezone.utc)
         self.updated_at = updated_at or datetime.now(timezone.utc)
         self.is_active = is_active
+        self.example_tweets = example_tweets or []
         # Payment related fields
         self.is_paid = is_paid
         self.payment_amount = payment_amount
@@ -78,14 +78,14 @@ class AgentConfig:
             "mission": self.mission,
             "questions": self.questions,
             "engagement_strategy": self.engagement_strategy,
-            "ai_and_agents": self.ai_and_agents,
-            "web3_builders": self.web3_builders,
-            "defi_experts": self.defi_experts,
+            "accounts_to_follow": self.accounts_to_follow,
+            "thought_leaders": self.thought_leaders,
             "knowledge_base": self.knowledge_base,
             "model_config": self.model_config,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "is_active": self.is_active,
+            "example_tweets": self.example_tweets,
             # Payment related fields
             "is_paid": self.is_paid,
             "payment_amount": self.payment_amount,
@@ -109,14 +109,14 @@ class AgentConfig:
             mission=data.get("mission", ""),
             questions=data.get("questions", []),
             engagement_strategy=data.get("engagement_strategy", ""),
-            ai_and_agents=data.get("ai_and_agents", []),
-            web3_builders=data.get("web3_builders", []),
-            defi_experts=data.get("defi_experts", []),
+            accounts_to_follow=data.get("accounts_to_follow", []),
+            thought_leaders=data.get("thought_leaders", []),
             knowledge_base=data.get("knowledge_base", ""),
             model_config=data.get("model_config", {}),
             created_at=data.get("created_at"),
             updated_at=data.get("updated_at"),
             is_active=data.get("is_active", True),
+            example_tweets=data.get("example_tweets", []),
             # Payment related fields
             is_paid=data.get("is_paid", False),
             payment_amount=data.get("payment_amount", 0.0),

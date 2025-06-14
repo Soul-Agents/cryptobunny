@@ -377,14 +377,14 @@ def post_tweet(client_id):
             "message": f"Failed to post tweet: {error_message}"
         }), 500
 
-@twitter_bp.route('/users', methods=['GET'])
+# @twitter_bp.route('/users', methods=['GET'])
 def get_all_users():
     """
     Get all Twitter users who have connected their accounts
     """
     try:
         db = get_db()
-        
+        agents = list(db.get_all_active_paid_agents())
         # Find all users with minimal information for security
         users = list(db.twitter_auth.find({}, {
             "client_id": 1,
@@ -392,16 +392,18 @@ def get_all_users():
             "user_name": 1,
             "created_at": 1,
             "updated_at": 1,
+            "username": 1,
             "_id": 0  # Exclude MongoDB _id
         }))
         
         # Convert dates to string for JSON serialization
         users_json = json.loads(json.dumps(users, default=str))
-        
+        agents_json = json.loads(json.dumps(agents, default=str))
         return jsonify({
             "status": "success",
             "count": len(users_json),
-            "users": users_json
+            "users": users_json,
+            "agents": agents_json
         })
     
     except Exception as e:

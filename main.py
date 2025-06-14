@@ -63,15 +63,11 @@ CONTENT_RESTRICTIONS = ""
 STRATEGY = ""
 REMEMBER = ""
 MISSION = ""
+ACCOUNTS_TO_FOLLOW = []
 QUESTION = []
 ENGAGEMENT_STRATEGY = ""
-AI_AND_AGENTS = []
-WEB3_BUILDERS = []
-DEFI_EXPERTS = []
-THOUGHT_LEADERS = []
-TRADERS_AND_ANALYSTS = []
 KNOWLEDGE_BASE = ""
-FAMOUS_ACCOUNTS = []
+THOUGHT_LEADERS = []
 EXAMPLE_TWEETS = []
 
 # Global variable to track current agent configuration
@@ -177,13 +173,12 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
             
             # Engagement strategy
             "ENGAGEMENT_STRATEGY": config.get("engagement_strategy", ""),
+
+            # Thought leaders
+            "THOUGHT_LEADERS": config.get("thought_leaders", []),
             
             # Target accounts
-            "AI_AND_AGENTS": config.get("ai_and_agents", []),
-            "WEB3_BUILDERS": config.get("web3_builders", []),
-            "DEFI_EXPERTS": config.get("defi_experts", []),
-            "THOUGHT_LEADERS": config.get("thought_leaders", []),
-            "TRADERS_AND_ANALYSTS": config.get("traders_and_analysts", []),
+            "ACCOUNTS_TO_FOLLOW": config.get("accounts_to_follow", []),
             
             # Knowledge base
             "KNOWLEDGE_BASE": config.get("knowledge_base", ""),
@@ -587,6 +582,12 @@ class AnswerTweetTool(BaseTweetTool):
             if not self._ensure_client():
                 return {"error": "Twitter client not initialized"}
 
+            with get_db() as db:
+                is_replied = db.check_if_tweet_replied_by_agent(USER_ID, tweet_id)
+                if is_replied:
+                    print("Tweet already replied to by agent")
+                    return {"error": "Tweet already replied to by agent, please try again with a different tweet"}
+
             # context of the tweet:
             print("tweet text", tweet_text)
             # Post reply using v2 endpoint
@@ -639,12 +640,18 @@ class ReadTweetsTool(BaseTweetTool):
 
             with get_db() as db:
                 needs_update, current_tweets = db.check_database_status(USER_ID)
-
+                
                 if not needs_update and current_tweets:
                     print("Using recent tweets from database")
                     return current_tweets
                 try:
-                    
+                    api_limits = db.get_api_limits(USER_ID)
+                    is_premium_api = api_limits.get("project_cap") > 100
+                    print("is_premium_api", is_premium_api)
+                    if api_limits:
+                        print("API limits found", api_limits)
+                    else:
+                        print("No API limits found")
 
                     response = self.api.get_home_timeline(
                         tweet_fields=[
@@ -1352,10 +1359,8 @@ prompt = ChatPromptTemplate.from_messages(
             Content restrictions: {CONTENT_RESTRICTIONS}.
             Knowledge base: {KNOWLEDGE_BASE}.
             Example X posts that you can get inspired by (don't repeat them): {EXAMPLE_TWEETS}.
-            Accounts to follow: {FAMOUS_ACCOUNTS}.
+            Accounts to follow and interact with: {ACCOUNTS_TO_FOLLOW} {THOUGHT_LEADERS}.
             Use the provided chat history to maintain context.
-
-        
             """, 
         ),
          ("placeholder", "{chat_history}"),
@@ -1410,6 +1415,7 @@ def run_crypto_agent(agent_config: AgentConfig):
         # session_id = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         client_id = agent_config.get("client_id")
         print(client_id, "client_id")
+
         # Load config and initialize Twitter client
         config = load_agent_config(client_id)
         print(config, "config")
@@ -1473,8 +1479,8 @@ def set_global_agent_variables(config: Dict[str, Any]) -> None:
     """
     global USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS, CLIENT_ID
     global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
-    global AI_AND_AGENTS, WEB3_BUILDERS, DEFI_EXPERTS, THOUGHT_LEADERS, TRADERS_AND_ANALYSTS
-    global KNOWLEDGE_BASE, FAMOUS_ACCOUNTS,  model_config, llm, CURRENT_AGENT_CONFIG
+    global ACCOUNTS_TO_FOLLOW
+    global KNOWLEDGE_BASE, THOUGHT_LEADERS,  model_config, llm, CURRENT_AGENT_CONFIG
     
     # Validate that config is not None
     if not config:
@@ -1483,7 +1489,7 @@ def set_global_agent_variables(config: Dict[str, Any]) -> None:
     
     # Set the current agent configuration for approval mode checking
     CURRENT_AGENT_CONFIG = config
-    print(config, "CONFIG")
+    # print(config, "CONFIG")
     print(config.get("client_id"), "CLIENT_ID")
     # Set global variables from config with fallbacks to current values
     CLIENT_ID = config.get("client_id", "")
@@ -1498,12 +1504,8 @@ def set_global_agent_variables(config: Dict[str, Any]) -> None:
     ENGAGEMENT_STRATEGY = config.get("engagement_strategy", ENGAGEMENT_STRATEGY)
     
     # Ensure list values are actually lists
-    AI_AND_AGENTS = config.get("ai_and_agents", AI_AND_AGENTS) or []
-    WEB3_BUILDERS = config.get("web3_builders", WEB3_BUILDERS) or []
-    DEFI_EXPERTS = config.get("defi_experts", DEFI_EXPERTS) or []
+    ACCOUNTS_TO_FOLLOW = config.get("accounts_to_follow", ACCOUNTS_TO_FOLLOW) or []
     THOUGHT_LEADERS = config.get("thought_leaders", THOUGHT_LEADERS) or []
-    TRADERS_AND_ANALYSTS = config.get("traders_and_analysts", TRADERS_AND_ANALYSTS) or []
-    FAMOUS_ACCOUNTS = config.get("famous_accounts", FAMOUS_ACCOUNTS) or []
     KNOWLEDGE_BASE = config.get("knowledge_base", KNOWLEDGE_BASE)
     
 

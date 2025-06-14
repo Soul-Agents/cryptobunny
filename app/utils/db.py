@@ -47,6 +47,7 @@ class TweetDB:
             self.written_ai_tweet_replies = self.db.written_ai_tweet_replies
             self.rate_limits = self.db.rate_limits
             self.tweets = self.db.tweets
+            self.agent_schedules = self.db.agent_schedules
 
             # Create indexes for rate_limits collection
             self.rate_limits.create_index([("client_id", pymongo.ASCENDING)], unique=True)
@@ -564,7 +565,29 @@ class TweetDB:
             "message": f"Reply marked as posted" if result.modified_count > 0 else "Reply not found",
             "modified_count": result.modified_count
         }
-
+    # --- Agent Schedules Methods ---
+    
+    def insert_agent_schedule(self, schedule_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Add a new agent schedule
+        
+        Args:   
+            schedule_data: Dictionary containing schedule data
+            
+        Returns:
+            Dictionary with operation result
+        """
+        result = self.agent_schedules.update_one(
+            {"client_id": schedule_data["client_id"]},
+            {"$set": schedule_data},
+            upsert=True
+        )
+        return {
+            "status": "success",
+            "message": "Agent schedule added",
+            
+        }
+    
 # Singleton instance
 _db_instance = None
 
