@@ -119,6 +119,83 @@ def save_twitter_keys():
             "message": f"Failed to save Twitter API keys: {str(e)}"
         }), 500
 
+@auth_bp.route('/update-twitter-keys', methods=['PUT'])
+@require_auth
+def update_twitter_keys():
+    """
+    Update Twitter API key and API secret key for an existing client
+    """
+    try:
+        # Extract data from request
+        data = request.json
+        if not data:
+            return jsonify({
+                "status": "error",
+                "message": "No data provided"
+            }), 400
+        
+        # Extract required fields
+        client_id = data.get('clientId')
+        api_key = data.get('apiKey')
+        api_secret_key = data.get('apiSecretKey')
+        
+        # Validate required fields
+        if not client_id or not api_key or not api_secret_key:
+            return jsonify({
+                "status": "error",
+                "message": "Client ID, API key, and API secret key are required"
+            }), 400
+        
+        # Get database connection
+        db = get_db()
+        
+        # Check if client exists
+        existing_auth = db.twitter_auth.find_one({"client_id": client_id})
+        if not existing_auth:
+            return jsonify({
+                "status": "error",
+                "message": "Client not found"
+            }), 404
+        
+        # Generate new bearer token
+        bearer_token = generate_bearer_token(api_key, api_secret_key)
+        print(bearer_token, "BEARER TOKEN")
+        # Prepare auth data with encryption
+        auth_data = {
+            "api_key": api_key,
+            "api_secret_key": api_secret_key,
+            "bearer_token": bearer_token,
+            "updated_at": datetime.now(timezone.utc)
+        }
+        
+        # Encrypt sensitive data
+        auth_data = encrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+        
+        # Update existing record
+        result = db.twitter_auth.update_one(
+            {"client_id": client_id},
+            {"$set": auth_data}
+        )
+        
+        print(result.modified_count, "RESULT")
+        if result.modified_count == 0:
+            return jsonify({
+                "status": "error",
+                "message": "Failed to update Twitter API keys"
+            }), 500
+        
+        return jsonify({
+            "success": True,
+            "message": "Twitter API keys updated successfully",
+            "client_id": client_id
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to update Twitter API keys: {str(e)}"
+        }), 500
+
 @auth_bp.route('/api-keys/<client_id>', methods=['DELETE'])
 def delete_twitter_credentials(client_id):
     """
