@@ -176,6 +176,13 @@ def update_twitter_keys():
             {"client_id": client_id},
             {"$set": auth_data}
         )
+        agent_config = db.agent_config.update_one(
+            {"client_id": client_id},
+            {"$set": {
+                "has_twitter_keys": True,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
         
         print(result.modified_count, "RESULT")
         if result.modified_count == 0:
@@ -204,6 +211,13 @@ def delete_twitter_credentials(client_id):
     try:
         db = get_db()
         auth = db.twitter_auth.find_one({"client_id": client_id})
+        db.agent_config.update_one(
+            {"client_id": client_id},
+            {"$set": {
+                "has_twitter_keys": False,
+                "updated_at": datetime.now(timezone.utc)
+            }}
+        )
         if not auth:
             return jsonify({
                 "success": False,
