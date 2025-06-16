@@ -846,9 +846,7 @@ def run_agents():
         
         # Get all active and paid agents
         active_agents = db.get_all_active_paid_agents()
-       
-  
-       
+     
 
   
         
@@ -968,7 +966,7 @@ def run_agents():
                     
                     try:
                         # Execute the agent
-                        # main.run_crypto_agent(agent_config)
+                        main.run_crypto_agent(agent_config)
                         msg = f"Agent executed successfully: {client_id}/{agent_name}"
                         logger.info(msg)
                         log_queue.put(msg)

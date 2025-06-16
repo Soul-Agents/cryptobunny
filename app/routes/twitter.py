@@ -6,12 +6,13 @@ from datetime import datetime, timezone
 from app.utils.db import get_db
 from app.config.config import Config
 from app.utils.encryption import decrypt_dict_values,SENSITIVE_FIELDS
-
+from app.utils.protect import require_auth
 
 # Create Blueprint
 twitter_bp = Blueprint('twitter', __name__, url_prefix='/twitter')
 
 @twitter_bp.route('/auth/<client_id>', methods=['GET'])
+@require_auth
 def get_twitter_auth(client_id):
     """
     Get Twitter authentication information for a client
@@ -377,7 +378,7 @@ def post_tweet(client_id):
             "message": f"Failed to post tweet: {error_message}"
         }), 500
 
-# @twitter_bp.route('/users', methods=['GET'])
+@twitter_bp.route('/users', methods=['GET'])
 def get_all_users():
     """
     Get all Twitter users who have connected their accounts
@@ -412,4 +413,106 @@ def get_all_users():
         return jsonify({
             "status": "error",
             "message": f"Failed to get users: {error_message}"
+        }), 500
+
+@twitter_bp.route('/check-connection/<client_id>', methods=['GET'])
+@require_auth
+def check_twitter_connection(client_id):
+    """
+    Check if Twitter connection is working properly for a client
+    """
+    try:
+        print(f"Checking Twitter connection for client_id: {client_id}")
+        
+        db = get_db()
+        auth_data = db.get_twitter_auth(client_id)
+        
+        if not auth_data or not isinstance(auth_data, dict):
+            return jsonify({
+                "status": "error",
+                "message": "No Twitter authentication found",
+                "error_type": "not_found",
+                "recommendation": "Please authenticate with Twitter first"
+            }), 404
+        
+        # Check if required credentials exist
+        required_fields = ["api_key", "api_secret_key", "access_token", "access_token_secret"]
+        missing_fields = [field for field in required_fields if not auth_data.get(field)]
+        
+        if missing_fields:
+            return jsonify({
+                "status": "error",
+                "message": f"Twitter authentication data is incomplete. Missing: {', '.join(missing_fields)}",
+                "error_type": "incomplete_data",
+                "recommendation": "Please reconnect your Twitter account"
+            }), 400
+        
+        try:
+            # Decrypt sensitive fields
+            decrypted_auth = decrypt_dict_values(auth_data, SENSITIVE_FIELDS)
+            
+            # Create client with the stored credentials
+            client = tweepy.Client(
+                consumer_key=decrypted_auth["api_key"],
+                consumer_secret=decrypted_auth["api_secret_key"],
+                access_token=decrypted_auth["access_token"],
+                access_token_secret=decrypted_auth["access_token_secret"]
+            )
+            
+            # Test: Get user info and verify permissions
+            user = client.get_me()
+            if not user or not user.data:
+                return jsonify({
+                    "status": "error",
+                    "message": "Could not retrieve user information",
+                    "error_type": "api_error",
+                    "recommendation": "Please check your Twitter credentials"
+                }), 400
+            
+            return jsonify({
+                "status": "success",
+                "message": "Twitter connection is working properly",
+                "data": {
+                    "user_id": user.data.id,
+                    "user_name": user.data.username,
+                    "verified": True
+                }
+            })
+            
+        except tweepy.TweepyException as tweet_error:
+            error_str = str(tweet_error)
+            print(f"Twitter API Error: {error_str}")
+            
+            # Determine specific error type
+            error_type = "unknown"
+            recommendation = "Please try reconnecting your Twitter account"
+            
+            if "401" in error_str:
+                error_type = "unauthorized"
+                recommendation = "Your Twitter credentials have expired or been revoked. Check your API keys and tokens."
+            elif "403" in error_str:
+                error_type = "forbidden"
+                recommendation = "Your Twitter app doesn't have permission to perform this action. Check your app permissions."
+            elif "404" in error_str:
+                error_type = "not_found"
+                recommendation = "Twitter user account not found. The account may have been deleted or suspended."
+            elif "429" in error_str:
+                error_type = "rate_limit"
+                recommendation = "Twitter rate limit exceeded. Please try again later."
+            
+            return jsonify({
+                "status": "error",
+                "message": f"Twitter API error: {error_str}",
+                "error_type": error_type,
+                "recommendation": recommendation,
+                "reconnect_url": f"/connect-twitter-account?client_id={client_id}"
+            }), 401
+    
+    except Exception as e:
+        print(f"Internal Error in check_twitter_connection: {str(e)}")
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to check Twitter connection: {str(e)}",
+            "error_type": "server_error",
+            "recommendation": "Please try again later or contact support"
         }), 500 
