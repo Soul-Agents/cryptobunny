@@ -501,15 +501,23 @@ def twitter_callback():
         # Save to database
         result = db.add_twitter_auth(TwitterAuth(**encrypted_auth_data))
 
-        agent_config = db.agent_config.update_one(
+        updated_agent_config = db.agent_config.find_one_and_update(
             {"client_id": client_id},
             {"$set": {
                 "agent_name": user.data.username,
                 "updated_at": datetime.now(timezone.utc),
                 "is_twitter_authorized": True
-            }}
+            }},
+            return_document=True 
         )
-        frontend_redirect = f"{redirect_url}/app/payment?client_id={client_id}&auth=success&username={user.data.username}"
+        
+        is_paid = updated_agent_config.get('is_paid', False)  
+        
+        
+        if is_paid:
+            frontend_redirect = f"{redirect_url}/app/edit"
+        else:
+            frontend_redirect = f"{redirect_url}/app/payment?client_id={client_id}&auth=success&username={user.data.username}"
         return redirect(frontend_redirect)
     
     except Exception as e:
