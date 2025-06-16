@@ -325,8 +325,8 @@ def connect_twitter_account():
             print(f"Using provided client ID: {client_id}")
         
         # Get the redirect URL from query param for frontend callback
-        redirect_url = request.args.get('redirect_url', FRONTEND_URL)
-        
+        # redirect_url = request.args.get('redirect_url', FRONTEND_URL)
+        redirect_url = "https://soulagents.io"
         # Store the redirect URL and client ID in the session
         session['redirect_url'] = redirect_url
         session['client_id'] = client_id
