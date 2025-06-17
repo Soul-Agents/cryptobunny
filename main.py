@@ -1491,16 +1491,13 @@ def run_crypto_agent(agent_config: AgentConfig):
         # Configuration includes the session_id for history retrieval
         # config = {"configurable": {"session_id": SESSION_ID}}
         question = """
-         SINGLE ACTION:
+         TRIPLE-ACTION PROTOCOL:
          1. Read timeline for relevant posts
-         2. If found → Answer ONCE and STOP IMMEDIATELY
-         3. If not found → STOP IMMEDIATELY
+         2. Find up to 3 posts worth answering to → Answer to up to 3 posts and STOP
+         3. If no relevant posts found → STOP
          4. If already replied → STOP IMMEDIATELY
 
-         DO NOT:
-         - Continue reading timeline after answering
-         - Reply to multiple tweets
-         - Reply to own tweets
+         DO NOT: Reply to own tweets
 
          END PROTOCOL:
          → STOP
