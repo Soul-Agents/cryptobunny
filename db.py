@@ -70,7 +70,7 @@ class TweetDB:
             # Add new collections for Twitter auth and agent configuration
             self.twitter_auth = self.db.twitter_auth
             self.agent_config = self.db.agent_config
-            self.api_limits = self.db.api_limits
+            self.rate_limits = self.db.rate_limits
 
             # Create index
             self.tweets.create_index("tweet_id", unique=True)
@@ -104,7 +104,7 @@ class TweetDB:
         
     def get_api_limits(self, client_id: str) -> Dict:
         """Get the API limits for a client"""
-        return self.api_limits.find_one({"client_id": client_id})
+        return self.rate_limits.find_one({"client_id": client_id})
     
     def add_reply_proposal(self, client_id: str, user_id: str, tweet_id: str, tweet_text: str, proposed_reply: str) -> Dict:
         """

@@ -173,7 +173,13 @@ def get_client_agent_config(client_id):
         db = get_db()
         config = db.get_agent_config(client_id)
 
+        valid_until = config.get("valid_until")
+        if valid_until:
+            valid_until = valid_until.isoformat()
+        else:
+            valid_until = None
 
+        config["valid_until"] = valid_until
         # auth_data = db.get_twitter_auth(client_id)
     
         if not config:
@@ -653,6 +659,7 @@ def process_agent_payment(client_id):
                 "updated_at": datetime.now(timezone.utc),
                 "tx_hash": tx_hash,
                 "is_all_setup": True,
+                "valid_until": datetime.now(timezone.utc) + timedelta(days=30),
                 # Also activate the agent since it's now paid
                 "is_active": True
             }}
@@ -736,6 +743,7 @@ def get_agent_payment_status(client_id):
             "payment_date": config.get("payment_date"),
             "payment_id": config.get("payment_id", ""),
             "is_active": config.get("is_active", False),
+            "valid_until": config.get("valid_until", None).isoformat(),
             "tx_hash": config.get("tx_hash", ""),
             "is_all_setup": config.get("is_all_setup", False)
         }
@@ -846,8 +854,7 @@ def run_agents():
         
         # Get all active and paid agents
         active_agents = db.get_all_active_paid_agents()
-     
-
+        
   
         
         if not active_agents or len(active_agents) == 0:

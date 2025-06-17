@@ -31,6 +31,25 @@ from pymongo import MongoClient
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_community.chat_message_histories import MongoDBChatMessageHistory
 
+# Initialize global variables
+USER_ID = ""
+USER_NAME = ""
+USER_PERSONALITY = ""
+STYLE_RULES = ""
+CONTENT_RESTRICTIONS = ""
+STRATEGY = ""
+REMEMBER = ""
+MISSION = ""
+ACCOUNTS_TO_FOLLOW = []
+QUESTION = []
+ENGAGEMENT_STRATEGY = ""
+KNOWLEDGE_BASE = ""
+THOUGHT_LEADERS = []
+EXAMPLE_TWEETS = []
+CLIENT_ID = ""
+CURRENT_AGENT_CONFIG = None
+model_config = None
+llm = None
 
 # Load environment variables
 load_dotenv(override=True)
@@ -127,6 +146,64 @@ if not verify_env_vars():
 def get_db():
     return TweetDB()
 
+def set_global_agent_variables(config: Dict[str, Any]) -> None:
+    """
+    Set global agent variables from config
+    
+    Args:
+        config (Dict[str, Any]): The agent configuration
+    """
+    global USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS, CLIENT_ID
+    global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
+    global ACCOUNTS_TO_FOLLOW
+    global KNOWLEDGE_BASE, THOUGHT_LEADERS, model_config, llm, CURRENT_AGENT_CONFIG, USER_ID
+    
+    print("\n[DEBUG] Setting global variables from config")
+    
+    # Validate that config is not None
+    if not config:
+        print("Error: Cannot set global variables - configuration is empty")
+        return
+    
+    # Set the current agent configuration for approval mode checking
+    CURRENT_AGENT_CONFIG = config
+    
+    # Set global variables from config with fallbacks to current values
+    USER_ID = config.get("USER_ID", "")
+    CLIENT_ID = config.get("CLIENT_ID", "")
+    USER_NAME = config.get("USER_NAME", USER_NAME)
+    USER_PERSONALITY = config.get("USER_PERSONALITY", USER_PERSONALITY)
+    STYLE_RULES = config.get("STYLE_RULES", STYLE_RULES)
+    CONTENT_RESTRICTIONS = config.get("CONTENT_RESTRICTIONS", CONTENT_RESTRICTIONS)
+    STRATEGY = config.get("STRATEGY", STRATEGY)
+    REMEMBER = config.get("REMEMBER", REMEMBER)
+    MISSION = config.get("MISSION", MISSION)
+    QUESTION = config.get("QUESTION", QUESTION)
+    ENGAGEMENT_STRATEGY = config.get("ENGAGEMENT_STRATEGY", ENGAGEMENT_STRATEGY)
+    
+    # Ensure list values are actually lists
+    ACCOUNTS_TO_FOLLOW = config.get("ACCOUNTS_TO_FOLLOW", ACCOUNTS_TO_FOLLOW) or []
+    THOUGHT_LEADERS = config.get("THOUGHT_LEADERS", THOUGHT_LEADERS) or []
+    KNOWLEDGE_BASE = config.get("KNOWLEDGE_BASE", KNOWLEDGE_BASE)
+    
+    print(f"[DEBUG] Global variables set - USER_ID: {USER_ID}, USER_NAME: {USER_NAME}")
+    
+    # Update model config and reinitialize LLM if provided
+    if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
+        try:
+            new_model_config = config["MODEL_CONFIG"]
+            
+            # Only update if we have a valid type
+            if "type" in new_model_config and new_model_config["type"]:
+                model_config = new_model_config
+                # Reinitialize LLM with new config
+                llm = initialize_llm(model_config)
+                print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
+            else:
+                print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
+        except Exception as e:
+            print(f"Error reinitializing LLM: {e}")
+            print("Continuing with current LLM")
 
 # Load agent configuration from database
 def load_agent_config(client_id: str) -> Optional[AgentConfig]:
@@ -144,6 +221,8 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
             print("Error: client_id is required")
             return None
             
+        print(f"\n[DEBUG] Loading config for client_id: {client_id}")
+        
         # Get the agent configuration from the database
         db = get_db()
         config = db.get_agent_config(client_id)
@@ -151,6 +230,8 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
         if not config:
             print(f"No configuration found for client_id: {client_id}")
             return None
+            
+        print(f"[DEBUG] Raw config from DB: {config}")
         
         # Initialize Twitter client with user credentials
         TwitterClient.initialize(config.get("client_id"))
@@ -193,6 +274,13 @@ def load_agent_config(client_id: str) -> Optional[AgentConfig]:
             "CLIENT_ID": client_id,
             "IS_ACTIVE": config.get("is_active", True)
         }
+        
+        print(f"[DEBUG] Processed agent_config: {agent_config}")
+        
+        # Set global variables from the configuration
+        set_global_agent_variables(agent_config)
+        
+        print(f"[DEBUG] After setting globals - USER_ID: {USER_ID}, USER_NAME: {USER_NAME}")
         
         return agent_config
         
@@ -590,6 +678,7 @@ class AnswerTweetTool(BaseTweetTool):
 
             # context of the tweet:
             print("tweet text", tweet_text)
+            print(USER_ID, "USER ID")
             # Post reply using v2 endpoint
             response = self.api.create_tweet(
                 text=message, in_reply_to_tweet_id=tweet_id
@@ -637,7 +726,7 @@ class ReadTweetsTool(BaseTweetTool):
             if not self._ensure_client():
                 print("Failed to get Twitter client")
                 return []
-
+            print("USER ID", USER_ID)
             with get_db() as db:
                 needs_update, current_tweets = db.check_database_status(USER_ID)
                 
@@ -645,13 +734,15 @@ class ReadTweetsTool(BaseTweetTool):
                     print("Using recent tweets from database")
                     return current_tweets
                 try:
+                  
                     api_limits = db.get_api_limits(USER_ID)
-                    is_premium_api = api_limits.get("project_cap") > 100
-                    print("is_premium_api", is_premium_api)
-                    if api_limits:
-                        print("API limits found", api_limits)
-                    else:
-                        print("No API limits found")
+                    print(api_limits, "API LIMITS")
+                    # is_premium_api = api_limits.get("project_cap") > 100
+                    # print("is_premium_api", is_premium_api)
+                    # if api_limits:
+                    #     print("API limits found", api_limits)
+                    # else:
+                    #     print("No API limits found")
 
                     response = self.api.get_home_timeline(
                         tweet_fields=[
@@ -670,6 +761,8 @@ class ReadTweetsTool(BaseTweetTool):
                         user_fields=["username", "name"],
                         max_results=3,
                     )
+
+                    print(response, "RESPONSE")
                     if hasattr(response, "data") and response.data:
                         formatted_tweets = [
                             Tweet(
@@ -1440,95 +1533,10 @@ def run_crypto_agent(agent_config: AgentConfig):
         print(traceback.format_exc()) # Print full traceback for debugging
         return {"error": str(e)}
 
-# 10. Main execution block (remains the same)
-if __name__ == "__main__":
-    try:
-        question = """
-         SINGLE ACTION:
-         1. Read timeline for relevant posts
-         2. If found → Answer ONCE and STOP IMMEDIATELY
-         3. If not found → STOP IMMEDIATELY
-         4. If already replied → STOP IMMEDIATELY
-
-         DO NOT:
-         - Continue reading timeline after answering
-         - Reply to multiple tweets
-         - Reply to own tweets
-
-         END PROTOCOL:
-         → STOP
-         """
-        print(f"\nRunning agent with question: {question}\n")
-        response = run_crypto_agent(question)
-        print("\nAgent Response:")
-        print(response)
-    except Exception as e:
-        print(f"Critical Error: {str(e)}")
 
 
 
 
-
-# # Function to set global agent variables from config
-def set_global_agent_variables(config: Dict[str, Any]) -> None:
-    """
-    Set global agent variables from config
-    
-    Args:
-        config (Dict[str, Any]): The agent configuration
-    """
-    global USER_NAME, USER_PERSONALITY, STYLE_RULES, CONTENT_RESTRICTIONS, CLIENT_ID
-    global STRATEGY, REMEMBER, MISSION, QUESTION, ENGAGEMENT_STRATEGY
-    global ACCOUNTS_TO_FOLLOW
-    global KNOWLEDGE_BASE, THOUGHT_LEADERS,  model_config, llm, CURRENT_AGENT_CONFIG
-    
-    # Validate that config is not None
-    if not config:
-        print("Error: Cannot set global variables - configuration is empty")
-        return
-    
-    # Set the current agent configuration for approval mode checking
-    CURRENT_AGENT_CONFIG = config
-    # print(config, "CONFIG")
-    print(config.get("client_id"), "CLIENT_ID")
-    # Set global variables from config with fallbacks to current values
-    CLIENT_ID = config.get("client_id", "")
-    USER_NAME = config.get("user_name", USER_NAME)
-    USER_PERSONALITY = config.get("user_personality", USER_PERSONALITY)
-    STYLE_RULES = config.get("style_rules", STYLE_RULES)
-    CONTENT_RESTRICTIONS = config.get("content_restrictions", CONTENT_RESTRICTIONS)
-    STRATEGY = config.get("strategy", STRATEGY)
-    REMEMBER = config.get("remember", REMEMBER)
-    MISSION = config.get("mission", MISSION)
-    QUESTION = config.get("question", QUESTION)
-    ENGAGEMENT_STRATEGY = config.get("engagement_strategy", ENGAGEMENT_STRATEGY)
-    
-    # Ensure list values are actually lists
-    ACCOUNTS_TO_FOLLOW = config.get("accounts_to_follow", ACCOUNTS_TO_FOLLOW) or []
-    THOUGHT_LEADERS = config.get("thought_leaders", THOUGHT_LEADERS) or []
-    KNOWLEDGE_BASE = config.get("knowledge_base", KNOWLEDGE_BASE)
-    
-
-    print(CLIENT_ID, "CLIENT_ID")
-
-    
-    # Update model config and reinitialize LLM if provided
-    if "MODEL_CONFIG" in config and config["MODEL_CONFIG"]:
-        try:
-            new_model_config = config["MODEL_CONFIG"]
-            
-            # Only update if we have a valid type
-            if "type" in new_model_config and new_model_config["type"]:
-                model_config = new_model_config
-                # Reinitialize LLM with new config
-                llm = initialize_llm(model_config)
-                print(f"Reinitialized LLM with model type: {model_config.get('type', 'unknown')}")
-            else:
-                print("Warning: MODEL_CONFIG has no type specified, keeping current LLM")
-        except Exception as e:
-            print(f"Error reinitializing LLM: {e}")
-            print("Continuing with current LLM")
-    
    
 
 def get_username_from_author_id(author_id: str) -> str:
