@@ -1,11 +1,39 @@
+# Environment variables and secrets
 .env
+.env.*
+*.env
 
-.DS_Store
+# SSH keys and sensitive files
+id_*
+*.pem
+*.key
+new-one*
+*.pub
 
-/myenv
-/__pycache__
-.venv
-/venv
+# Virtual environments
 venv/
-*.pyc
+env/
+.venv/
+/myenv
+
+# Database files with credentials
+db.py
+
+# Jupyter notebooks (often contain API keys)
+*.ipynb
+
+# Python cache
 __pycache__/
+*.pyc
+*.pyo
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
